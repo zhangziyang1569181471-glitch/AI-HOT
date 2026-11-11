@@ -42,7 +42,7 @@ export function parseLooseDate(value: string | null | undefined, utcOffset = "+0
   const numeric = yearFirst ?? monthFirst?.map((part, i, match) => i === 1 ? match[3]! : i === 2 ? match[1]! : i === 3 ? match[2]! : part);
   if (numeric && !calendarDay(numeric[1]!, numeric[2]!, numeric[3]!)) return null;
   const english = /\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(\d{4})\b/i.exec(v)
-    ?? /\b(\d{1,2})\s+([a-z]{3,9})\.?[,]?\s+(\d{2}|\d{4})\b/i.exec(v)?.map((part, i, match) => i === 1 ? match[2]! : i === 2 ? match[1]! : part);
+    ?? /\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?[,]?\s+(\d{2}|\d{4})\b/i.exec(v)?.map((part, i, match) => i === 1 ? match[2]! : i === 2 ? match[1]! : part);
   if (english) {
     if (english[3]!.length === 2) english[3] = String(Number(english[3]) + (Number(english[3]) < 50 ? 2000 : 1900));
     const month = Date.parse(`${english[1]} 1, ${english[3]} 00:00:00 GMT`);

@@ -9,6 +9,14 @@ import { parseLooseDate, readPublicationDate, readRelativeDate, describePublicat
 
 const iso = (v: string, offset?: string) => parseLooseDate(v, offset)?.toISOString() ?? null;
 
+// Public news lists also print English ordinals with the day first.
+test("day-first ordinal dates keep the source's calendar day and reject impossible dates", () => {
+  for (const [text, day] of [["1st Oct 2026", "01"], ["22nd Oct 2026", "22"], ["23rd Oct 2026", "23"], ["24th Oct 2026", "24"]]) {
+    assert.deepEqual(readPublicationDate(text, "+00:00"), { publishedAt: new Date(`2026-10-${day}T00:00:00Z`), publicationTime: `2026-10-${day}` });
+  }
+  assert.equal(iso("31st Feb 2026", "+00:00"), null);
+});
+
 test("a date and time without a zone is in the source's offset, not the server's", () => {
   assert.equal(iso("2026-09-26 10:00"), "2026-09-26T02:00:00.000Z");
   assert.equal(iso("2026-09-26T10:00:00"), "2026-09-26T02:00:00.000Z");

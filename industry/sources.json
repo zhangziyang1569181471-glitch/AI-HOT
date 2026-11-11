@@ -1,20 +1,50 @@
 {
-  "$comment": "示范信源：首次启动时导入（scripts/seed.ts），已存在的不会被覆盖。之后在后台“信源”里新建、修改和暂停。字段说明见 docs/customize.md。",
+  "$comment": "澳洲政策雷达启动信源。默认启用5个已验证解析的官方来源；其余为明确暂停的候选配置，须在后台试抓并补全日期、选择器后启用。启动仅补充新ID，不删除或覆盖已有信源。详见 docs/australia.md。内政部接口按自然年查询，跨年前需在后台更新 Year。",
   "sources": [
     {
-      "id": "rss-openai-news",
-      "name": "OpenAI News",
-      "kind": "rss",
+      "id": "au-home-affairs-news",
+      "name": "澳洲内政部：移民与公民新闻",
+      "kind": "json_list",
       "config": {
-        "feedUrl": "https://openai.com/news/rss.xml",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://immi.homeaffairs.gov.au/_layouts/15/api/Data.aspx/GetNews",
+        "mode": "json_api",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "bodyJson": {
+          "siteUrl": "https://www.homeaffairs.gov.au",
+          "webUrl": "/News-subsite",
+          "filter": {
+            "Month": null,
+            "Year": "2026",
+            "Categories": [],
+            "PageNumber": 1,
+            "RowLimit": 100,
+            "ShowCurrentSiteOnly": true,
+            "CurrentSite": "Immi"
+          }
+        },
+        "itemsPath": "d.data",
+        "titlePaths": [
+          "Title"
+        ],
+        "summaryPaths": [
+          "Content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "Date",
+        "externalIdPath": "Id",
+        "urlTemplate": "https://immi.homeaffairs.gov.au/news-media/archive/article?itemId={Id}"
       },
       "tier": "T1",
-      "owner_entity_id": "openai",
+      "owner_entity_id": "home-affairs",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
         "官方"
       ],
@@ -22,19 +52,28 @@
       "syndicate_fulltext": false
     },
     {
-      "id": "rss-google-deepmind",
-      "name": "Google DeepMind",
-      "kind": "rss",
+      "id": "au-nsw-news",
+      "name": "新州：签证与移民更新",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://deepmind.google/blog/rss.xml",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.nsw.gov.au/visas-and-migration/news-and-updates",
+        "itemSelector": ".nsw-card--news",
+        "linkSelector": ".nsw-card__title a",
+        "titleSelector": ".nsw-card__title a",
+        "publishedAtSelector": "time[datetime]",
+        "allowUrlPrefixes": [
+          "https://www.nsw.gov.au/visas-and-migration/news-and-updates/"
+        ]
       },
       "tier": "T1",
-      "owner_entity_id": "google",
+      "owner_entity_id": "migration-nsw",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
         "官方"
       ],
@@ -42,82 +81,28 @@
       "syndicate_fulltext": false
     },
     {
-      "id": "rss-google-research",
-      "name": "Google Research",
-      "kind": "rss",
+      "id": "au-sa-news",
+      "name": "南澳：移民项目新闻",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://research.google/blog/rss/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://migration.sa.gov.au/news",
+        "itemSelector": "div.col-span-full:has(> h3):has(a[href*=\"/news/\"])",
+        "linkSelector": "a[href*=\"/news/\"]",
+        "titleSelector": "h3",
+        "publishedAtSelector": "div.uppercase span",
+        "allowUrlPrefixes": [
+          "https://migration.sa.gov.au/news/"
+        ]
       },
       "tier": "T1",
-      "owner_entity_id": "google",
+      "owner_entity_id": "migration-sa",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
-      "tags": [
-        "官方",
-        "研究"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-hugging-face",
-      "name": "Hugging Face Blog",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://huggingface.co/blog/feed.xml",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T1",
-      "owner_entity_id": "hugging-face",
-      "participation_mode": "editorial",
-      "interval_minutes": 120,
-      "tags": [
-        "官方",
-        "开源"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-microsoft-research",
-      "name": "Microsoft Research",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://www.microsoft.com/en-us/research/feed/",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T1",
-      "owner_entity_id": "microsoft",
-      "participation_mode": "editorial",
-      "interval_minutes": 120,
-      "tags": [
-        "官方",
-        "研究"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-nvidia-blog",
-      "name": "NVIDIA Blog",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://blogs.nvidia.com/feed/",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T1",
-      "owner_entity_id": "nvidia",
-      "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
         "官方"
       ],
@@ -125,40 +110,29 @@
       "syndicate_fulltext": false
     },
     {
-      "id": "rss-aws-ml",
-      "name": "AWS Machine Learning Blog",
-      "kind": "rss",
+      "id": "au-wa-news",
+      "name": "西澳：州担保与移民新闻",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://aws.amazon.com/blogs/machine-learning/feed/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://migration.wa.gov.au/news",
+        "itemSelector": ".news-content-section",
+        "linkSelector": ".news-link a",
+        "titleSelector": ".news-title h2",
+        "publishedAtSelector": "time[datetime]",
+        "allowUrlPrefixes": [
+          "https://migration.wa.gov.au/news/"
+        ],
+        "publishedAtUtcOffset": "+08:00"
       },
       "tier": "T1",
-      "owner_entity_id": null,
+      "owner_entity_id": "migration-wa",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
-      "tags": [
-        "官方",
-        "教程"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-github-ai",
-      "name": "GitHub Blog · AI & ML",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://github.blog/ai-and-ml/feed/",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T1",
-      "owner_entity_id": null,
-      "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
         "官方"
       ],
@@ -166,19 +140,28 @@
       "syndicate_fulltext": false
     },
     {
-      "id": "rss-mistral",
-      "name": "Mistral AI",
-      "kind": "rss",
+      "id": "au-study-australia",
+      "name": "Study Australia：教育代理公告",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://mistral.ai/news/rss",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.studyaustralia.gov.au/en/Agent-Hub/agent-news-index",
+        "itemSelector": ".search-result:has(.news-result-heading)",
+        "linkSelector": ".news-result-heading a",
+        "titleSelector": ".news-result-heading a",
+        "publishedAtSelector": ".news-result-date",
+        "allowUrlPrefixes": [
+          "https://www.studyaustralia.gov.au/en/Agent-Hub/agent-news-index/"
+        ]
       },
       "tier": "T1",
-      "owner_entity_id": null,
+      "owner_entity_id": "study-australia",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
         "官方"
       ],
@@ -186,185 +169,192 @@
       "syndicate_fulltext": false
     },
     {
-      "id": "rss-bair",
-      "name": "Berkeley AI Research",
-      "kind": "rss",
+      "id": "au-vic-news",
+      "name": "维州：州担保新闻（访问验证待处理）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://bair.berkeley.edu/blog/feed.xml",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://liveinmelbourne.vic.gov.au/news-events/news",
+        "itemSelector": "main a[href*=\"/news-events/news/\"]",
+        "allowUrlPrefixes": [
+          "https://liveinmelbourne.vic.gov.au/news-events/news/"
+        ]
       },
       "tier": "T1",
-      "owner_entity_id": null,
+      "owner_entity_id": "migration-vic",
       "participation_mode": "editorial",
-      "interval_minutes": 180,
+      "interval_minutes": 240,
       "tags": [
-        "研究"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-the-verge-ai",
-      "name": "The Verge · AI",
-      "kind": "rss",
+      "id": "au-tas-news",
+      "name": "塔州：移民新闻（访问验证待处理）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.migration.tas.gov.au/news",
+        "itemSelector": "main a[href*=\"/news/\"]",
+        "allowUrlPrefixes": [
+          "https://www.migration.tas.gov.au/news/"
+        ]
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "migration-tas",
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 240,
       "tags": [
-        "媒体"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-techcrunch-ai",
-      "name": "TechCrunch · AI",
-      "kind": "rss",
+      "id": "au-qld-news",
+      "name": "昆州：移民新闻（发布日期待核验）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://migration.qld.gov.au/news",
+        "itemSelector": ".stories-list a.story-wrapper",
+        "linkSelector": "a",
+        "titleSelector": "h5",
+        "allowUrlPrefixes": [
+          "https://migration.qld.gov.au/news/"
+        ]
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "migration-qld",
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 240,
       "tags": [
-        "媒体"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-ars-technica-ai",
-      "name": "Ars Technica · AI",
-      "kind": "rss",
+      "id": "au-act-news",
+      "name": "首都领地：移民新闻（访问验证待处理）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://arstechnica.com/ai/feed/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.act.gov.au/migration/resources/latest-news",
+        "itemSelector": "main a[href*=\"/migration/\"]"
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "migration-act",
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 240,
       "tags": [
-        "媒体"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-mit-tech-review-ai",
-      "name": "MIT Technology Review · AI",
-      "kind": "rss",
+      "id": "au-education-news",
+      "name": "澳洲教育部：国际教育公告（连接与解析待核验）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.education.gov.au/announcements/international-education",
+        "itemSelector": "main article",
+        "linkSelector": "h2 a,h3 a",
+        "titleSelector": "h2 a,h3 a",
+        "publishedAtSelector": "time"
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "education-au",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
-        "媒体"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-the-decoder",
-      "name": "The Decoder",
-      "kind": "rss",
+      "id": "au-teqsa-news",
+      "name": "TEQSA：监管新闻（连接与解析待核验）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://the-decoder.com/feed/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.teqsa.gov.au/about-us/news-and-events/latest-news",
+        "itemSelector": "main article",
+        "linkSelector": "h2 a,h3 a",
+        "titleSelector": "h2 a,h3 a",
+        "publishedAtSelector": "time"
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "teqsa",
       "participation_mode": "editorial",
-      "interval_minutes": 60,
+      "interval_minutes": 240,
       "tags": [
-        "媒体"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     },
     {
-      "id": "rss-simon-willison",
-      "name": "Simon Willison",
-      "kind": "rss",
+      "id": "au-asqa-news",
+      "name": "ASQA：新闻与提醒（连接与解析待核验）",
+      "kind": "web_list",
       "config": {
-        "feedUrl": "https://simonwillison.net/atom/everything/",
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
         "_aihot": {
-          "initialBackfillLimit": 8
-        }
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.asqa.gov.au/newsroom/latest-news",
+        "itemSelector": "main article",
+        "linkSelector": "h2 a,h3 a",
+        "titleSelector": "h2 a,h3 a",
+        "publishedAtSelector": "time"
       },
-      "tier": "T2",
-      "owner_entity_id": null,
+      "tier": "T1",
+      "owner_entity_id": "asqa",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 240,
       "tags": [
-        "个人"
+        "官方"
       ],
       "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-import-ai",
-      "name": "Import AI",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://importai.substack.com/feed",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T2",
-      "owner_entity_id": null,
-      "participation_mode": "editorial",
-      "interval_minutes": 180,
-      "tags": [
-        "个人",
-        "周刊"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
-    },
-    {
-      "id": "rss-latent-space",
-      "name": "Latent Space",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://www.latent.space/feed",
-        "_aihot": {
-          "initialBackfillLimit": 8
-        }
-      },
-      "tier": "T2",
-      "owner_entity_id": null,
-      "participation_mode": "editorial",
-      "interval_minutes": 180,
-      "tags": [
-        "个人"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false
+      "syndicate_fulltext": false,
+      "enabled": false
     }
   ]
 }

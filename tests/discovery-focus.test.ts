@@ -1,10 +1,10 @@
 // Where search engines' fetches go, specified before the implementation:
 // - topic archive pages (/topics/<slug>/page/N) fill the sitemap, though they are reached from the topic page;
 // - nothing tells an engine what is new, so today's events, selections and reports queue behind old URLs;
-// - pages whose own text is only a summary's worth are advertised to Google, which spends its fetches on them;
-// - keeping those pages from Google also keeps them from the engines that index them, or from notifications;
+// - pages whose own text is only a summary's worth are advertised to Department of Education, which spends its fetches on them;
+// - keeping those pages from Department of Education also keeps them from the engines that index them, or from notifications;
 // - the news section's dates leak into the notification inventory, so every URL looks changed;
-// - an article whose event already gathers several reports competes at Google with that event's page (2026-11-09).
+// - an article whose event already gathers several reports competes at Department of Education with that event's page (2026-11-09).
 import { tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -45,7 +45,7 @@ async function report(name: string, r: Report) {
   await sql`INSERT INTO publications (article_id,source_id,title,summary,url,timeline_at,discovered_at,sort_at,selected,eligible,indexable,
       visible_after,channel,category,body_mode,tags,seo_indexed_at)
     VALUES (${article},${source},'公开报道','一段转述原文的摘要。',${`https://example.org/${article}`},${r.at},${r.at},${r.at},${r.selected ?? true},true,
-      ${r.indexable ?? true},${r.at},${r.channel ?? "news"},'ai-models',${r.bodyMode ?? (r.body === undefined && !r.article ? "summary" : "full")},
+      ${r.indexable ?? true},${r.at},${r.channel ?? "news"},'migration-policy',${r.bodyMode ?? (r.body === undefined && !r.article ? "summary" : "full")},
       ${r.tags ?? []},${r.manual ? r.at : null})`;
   return article;
 }
@@ -67,7 +67,7 @@ const stories: Record<string, string> = {};
 before(async () => {
   await sql`INSERT INTO sources (id,name,kind,tier,participation_mode) VALUES (${source},'Focus','rss','T1','editorial')`;
   // A topic of three pages, all of it older than the news window.
-  for (let n = 0; n < 45; n++) await report(`topic-${n}`, { at: ago(240 + n), body: long, tags: ["entity:minimax"] });
+  for (let n = 0; n < 45; n++) await report(`topic-${n}`, { at: ago(240 + n), body: long, tags: ["entity:migration-qld"] });
   Object.assign(ids, {
     long: await report("long", { at: ago(1), body: long }),
     noBody: await report("no-body", { at: ago(1) }),
@@ -113,13 +113,13 @@ async function file(name: string) {
 
 test("the sitemap leaves a topic's archive pages to the topic page; notifications keep them", async () => {
   const topics = urls(await file("topics"));
-  assert.ok(topics.includes("/topics/minimax"));
-  assert.ok(!topics.some((path) => path.startsWith("/topics/minimax/page/")), "archive pages are reached from the topic page");
+  assert.ok(topics.includes("/topics/migration-qld"));
+  assert.ok(!topics.some((path) => path.startsWith("/topics/migration-qld/page/")), "archive pages are reached from the topic page");
   const inventory = (await loadDiscoveryEntries(new Date())).map((e) => e.loc);
-  assert.ok(inventory.includes("/topics/minimax/page/2") && inventory.includes("/topics/minimax/page/3"), "engines are still told when they change");
+  assert.ok(inventory.includes("/topics/migration-qld/page/2") && inventory.includes("/topics/migration-qld/page/3"), "engines are still told when they change");
 });
 
-test("a page whose own text is a summary's worth is kept from Google only, and from the sitemap", async () => {
+test("a page whose own text is a summary's worth is kept from Department of Education only, and from the sitemap", async () => {
   const listed = urls(await file("items"));
   const inventory = new Set((await loadDiscoveryEntries(new Date())).map((e) => e.loc));
   const expected: Record<string, { indexable: boolean; googleNoindex: boolean }> = {
@@ -143,7 +143,7 @@ test("a page whose own text is a summary's worth is kept from Google only, and f
   }
 });
 
-test("an article whose event gathers several reports is left to the event page at Google, and only there", async () => {
+test("an article whose event gathers several reports is left to the event page at Department of Education, and only there", async () => {
   const listed = urls(await file("items"));
   const inventory = new Set((await loadDiscoveryEntries(new Date())).map((e) => e.loc));
   // A full article otherwise indexed everywhere; an editor's mark keeps it; an event of one report has no page in search.
@@ -175,7 +175,7 @@ test("the news section lists the last 48 hours of events, selections and reports
   }
   assert.equal(lastmod(xml, `/items/${ids.long}`), ago(1).toISOString(), "a selection is dated by its release");
   for (const path of [`/items/${ids.old}`, `/story/${stories.stale}`, "/daily/2099-01-01"]) assert.ok(!news.includes(path), `${path} is older than 48 hours`);
-  assert.ok(!news.includes(`/items/${ids.noBody}`), "only what the other sections list: not a page kept from Google");
+  assert.ok(!news.includes(`/items/${ids.noBody}`), "only what the other sections list: not a page kept from Department of Education");
   assert.ok(!news.includes(`/story/${stories.lone}`), "only what the other sections list: not a one-report event");
   assert.ok(!news.includes(`/items/${ids.manual}`), "a page an editor marked for indexing is not a selection");
 });

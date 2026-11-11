@@ -7,7 +7,7 @@
 // - a story has no machine-readable subject, or claims its first report is its own publication date;
 // - the founder is tied to only one public profile, so search engines and AI answers cannot connect the
 //   others to the site (2026-10-17);
-// - an article whose own text is a summary's worth is kept from every engine instead of only from Google,
+// - an article whose own text is a summary's worth is kept from every engine instead of only from Department of Education,
 //   or its original-language page says otherwise;
 // - an article names its author and publisher by an id defined only on the home page, so its own page names
 //   neither, or has no publication date when its source gave none; indexable pages keep search results and
@@ -28,9 +28,9 @@ import { dateLine } from "../apps/web/app/features/report/format.ts";
 import { startWebServer, type WebServer } from "../apps/web/tests/web-server.ts";
 
 const at = "2026-10-04T08:00:00.000Z";
-const item: FeedItemSummary = { id: "metadata-fixture", title: "可核实的测试报道", summary: "报道摘要", reason: null, source: { name: "Fixture" }, publishedAt: at, timelineAt: at, category: "ai-models", tags: [], score: 80, selected: true, channel: "news", x: null };
+const item: FeedItemSummary = { id: "metadata-fixture", title: "可核实的测试报道", summary: "报道摘要", reason: null, source: { name: "Fixture" }, publishedAt: at, timelineAt: at, category: "migration-policy", tags: [], score: 80, selected: true, channel: "news", x: null };
 const detail: SiteItemDetail = { ...item, x: null, originalTitle: null, links: { original: "https://example.org/report" }, discoveredAt: at, story: null, readingMode: "full", author: null, body: { zh: "<p>可核实的测试正文。</p>", original: null, zhKind: "original", complete: true }, outline: [], relatedStories: [], topics: [], tagTopics: {}, daily: null, indexable: true, googleNoindex: false, markdownAvailable: true, group: null, hasTranslation: false, bodyLanguage: "zh", mentions: [] };
-/** Article pages by id: the fixture, one kept from Google only, one kept from every engine. */
+/** Article pages by id: the fixture, one kept from Department of Education only, one kept from every engine. */
 const details: Record<string, SiteItemDetail> = {
   [item.id]: detail,
   "metadata-short": { ...detail, id: "metadata-short", googleNoindex: true },
@@ -74,7 +74,7 @@ before(async () => { web = await startWebServer(api); });
 after(async () => { await web?.stop(); });
 
 async function page(path: string) {
-  const response = await fetch(`${web.origin}${path}`);
+  const response = await fetch(new URL(path, web.origin).href);
   assert.equal(response.status, 200, web.logs());
   return cheerio.load(await response.text());
 }
@@ -85,10 +85,10 @@ function structured($: cheerio.CheerioAPI): Array<Record<string, unknown>> {
 }
 
 test("filtered feeds keep their exact content address but leave indexing to the public landing pages", async () => {
-  for (const base of ["/", "/all"]) for (const query of ["channel=news", "category=ai-models", "tag=Agent", "channel=x&category=paper&tag=Agent"]) {
+  for (const base of ["/", "/all"]) for (const query of ["channel=news", "category=migration-policy", "tag=州担保", "channel=x&category=study-graduates&tag=州担保"]) {
     const $ = await page(`${base}?${query}&utm_source=fixture&anchorAt=old&deep=1`);
     assert.equal($("meta[name=robots]").attr("content"), "noindex, follow", `${base}?${query}`);
-    assert.equal($("link[rel=canonical]").attr("href"), `${web.origin}${base}?${query}`);
+    assert.equal($("link[rel=canonical]").attr("href"), new URL(`${base}?${query}`, web.origin).href);
     assert.ok($("main").text().includes(item.title));
   }
   const $ = await page("/all?q=Claude&tab=relevance&page=2&anchorAt=old");
@@ -195,7 +195,7 @@ test("article metadata names its publisher, has a representative image and a dat
   assert.equal(articleLd({ path: "/items/test", headline: "更正", modifiedAt: modified }).dateModified, modified);
 });
 
-test("an article whose own text is a summary's worth asks only Google not to index it", async () => {
+test("an article whose own text is a summary's worth asks only Department of Education not to index it", async () => {
   for (const path of ["/items/metadata-short", "/items/metadata-short/original"]) {
     const $ = await page(path);
     assert.equal($("meta[name=googlebot]").attr("content"), "noindex", path);
@@ -207,7 +207,7 @@ test("an article whose own text is a summary's worth asks only Google not to ind
   assert.equal(ordinary("meta[name=robots]").attr("content"), "max-image-preview:large");
   const hidden = await page("/items/metadata-hidden");
   assert.equal(hidden("meta[name=robots]").attr("content"), "noindex, follow");
-  assert.equal(hidden("meta[name=googlebot]").length, 0, "robots already covers Google");
+  assert.equal(hidden("meta[name=googlebot]").length, 0, "robots already covers Department of Education");
 });
 
 test("story metadata describes the visible collection, current summary and report list", async () => {
