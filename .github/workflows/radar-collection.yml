@@ -1,39 +1,30 @@
-name: Australia Policy Radar collection
-
-on:
-  schedule:
-    - cron: '17 */4 * * *'
-  workflow_dispatch:
-    inputs:
-      retry_failed:
-        description: Retry degraded official sources only
-        type: boolean
-        default: false
-
+name: Australia Policy Radar source diagnostics
+on: workflow_dispatch
 permissions:
   contents: read
-
-concurrency:
-  group: radar-official-collection
-  cancel-in-progress: false
-
 jobs:
-  collect:
+  probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 4
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - name: Collect official sources
-        run: node scripts/collect-official-once.ts ${{ inputs.retry_failed && '--retry-failed' || '' }}
-        env:
-          NODE_ENV: production
-          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
-          COLLECT_ENABLED: 'true'
-          MODEL_CALLS_ENABLED: 'false'
+      - name: Probe official endpoints
+        shell: bash
+        run: |
+          probe() {
+            local name="$1" url="$2" marker="$3" output="$(mktemp)"
+            local result
+            result="$(curl --location --connect-timeout 10 --max-time 30 --silent --show-error --user-agent 'Mozilla/5.0 (compatible; PolicyRadar/1.0)' --header 'Accept-Language: en-AU,en;q=0.9' --output "$output" --write-out '%{http_code} %{remote_ip} %{size_download} %{url_effective}' "$url" 2>&1)" || true
+            local match=no
+            if grep -aiqE "$marker" "$output"; then match=yes; fi
+            echo "RADARPROBE $name [$result] content=$match"
+          }
+          probe edu https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status 'current.snapshot' &
+          probe edu-doc https://www.education.gov.au/download/19465/visa-prioritisation-status/46509/current-snapshot/docx 'word/' &
+          probe edu-alt https://internationaleducation.gov.au/Research/Pages/default.aspx 'Education' &
+          probe tra https://www.tradesrecognitionaustralia.gov.au/fees-1 'assessment service fees' &
+          probe tra-program https://www.tradesrecognitionaustralia.gov.au/our-programs/job-ready-program '2,845|490' &
+          probe qld https://migration.qld.gov.au/news 'stories-list' &
+          probe qld-www https://www.migration.qld.gov.au/news 'stories-list|story-wrapper' &
+          probe tiq https://www.tiq.qld.gov.au/queensland-business/news-and-events/news 'news' &
+          probe tga https://training.gov.au/organisation/details/90003 '_nuxt' &
+          wait
