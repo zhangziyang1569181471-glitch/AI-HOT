@@ -32,6 +32,12 @@
 
 三个部长 RSS 使用官网公开的 RSS 地址，保留条件请求。维州、塔州、北领地主管部门，以及部分联邦教育与就业站点的列表通过 [Jina Reader 公开网页读取服务](https://jina.ai/en-US/api-dashboard/rate-limit/) 获取 HTML，再读取官方结构及原文链接。公开读取使用共享限额，每进程间隔至少 3.1 秒；请求允许 15 分钟的事先读取缓存。其余列表直接请求官方入口。
 
+## 昆州待审线索
+
+[qld-google-news-leads](https://news.google.com/rss/search?q=site%3Awww.migration.qld.gov.au%2Fnews&hl=en-AU&gl=AU&ceid=AU%3Aen) 由 GitHub Actions 每 4 小时采集。后台在「信源 → 昆州移民新闻 · Google 新闻 RSS（待审线索）」查看。采集器核对索引标注的机构域名，按 Google 新闻链接去重。待审条目保留标题和 Google 新闻链接，正文与原始发布日期留空。核实昆州移民局原文后，可用官方链接另行收录。官方新闻源 `au-qld-news` 继续记录官网的实测状态。
+
+手动运行 Australia Policy Radar collection 时可勾选 `qld_leads_only`。定时运行时先读取待审线索，再采集官方信源。
+
 ## 原址更新页面
 
 | 信源 ID | 官方入口 | 监测内容 |

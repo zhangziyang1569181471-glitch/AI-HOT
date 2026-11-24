@@ -241,6 +241,19 @@
       "enabled": true
     },
     {
+      "id": "qld-google-news-leads",
+      "name": "昆州移民新闻 · Google 新闻 RSS（待审线索）",
+      "kind": "external",
+      "config": {},
+      "tier": "T2",
+      "participation_mode": "isolated",
+      "interval_minutes": 240,
+      "tags": ["昆州", "待审线索"],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
       "id": "au-qld-news",
       "name": "昆州：移民与州担保新闻",
       "kind": "web_list",

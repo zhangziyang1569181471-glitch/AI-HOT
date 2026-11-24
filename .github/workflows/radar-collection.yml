@@ -5,6 +5,10 @@ on:
     - cron: '17 */4 * * *'
   workflow_dispatch:
     inputs:
+      qld_leads_only:
+        description: Collect Queensland Google News review leads only
+        type: boolean
+        default: false
       retry_failed:
         description: Retry degraded official sources only
         type: boolean
@@ -30,7 +34,19 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+        id: dependencies
+      - name: Collect Queensland Google News leads
+        if: ${{ !inputs.retry_failed || inputs.qld_leads_only }}
+        run: |
+          node scripts/seed.ts --source qld-google-news-leads
+          node scripts/collect-qld-news-leads.ts
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          COLLECT_ENABLED: 'true'
+          MODEL_CALLS_ENABLED: 'false'
       - name: Collect official sources
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && !inputs.qld_leads_only }}
         run: node scripts/collect-official-once.ts ${{ inputs.retry_failed && '--retry-failed' || '' }}
         env:
           NODE_ENV: production

@@ -9,6 +9,7 @@ import { config } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { watchOfficialPage } from "../watch.ts";
+import { collectQueenslandNewsLeads, QUEENSLAND_LEADS_ID, QUEENSLAND_NEWS_RSS } from "../qld-news-leads.ts";
 import { parseTasmaniaRound } from "../tasmania.ts";
 import { readStudentPriorityRules } from "../government-snapshots.ts";
 import { cricosRecord, providerPriorityDocument, readEmployerSalaries, readTraFees, readTrainingRegister } from "../approved-pages.ts";
@@ -226,4 +227,44 @@ test("Education snapshot reads provider codes and priorities from the current DO
   assert.equal(document.evidence.records, 10);
   assert.match(document.text, /10000A \| Test Institute \| Priority 2/);
   assert.throws(() => providerPriorityDocument(archive(1), resource), /no readable provider priority rows/);
+});
+
+test("Queensland RSS collects isolated review leads once and ignores index dates", async () => {
+  await sql`INSERT INTO sources(id,name,kind,tier,participation_mode,interval_minutes)
+    VALUES(${QUEENSLAND_LEADS_ID},'Queensland review leads','external','T2','isolated',240) ON CONFLICT(id) DO NOTHING`;
+  const href = new URL(QUEENSLAND_NEWS_RSS);
+  const source = "https://www.migration.qld.gov.au";
+  const link = "https://news.google.com/rss/articles/aBc01";
+  const item = (title: string, url: string, publisher = source) =>
+    "<item><title>" + title + " - Migration Queensland</title><link>" + url + "</link>"
+    + "<source url='" + publisher + "'>Migration Queensland</source><pubDate>Thu, 19 Nov 2026 13:13:41 GMT</pubDate>"
+    + "<description>Google index excerpt</description></item>";
+  const reply = (entries: string) => network.get(href.origin).intercept({ path: href.pathname + href.search })
+    .reply(200, "<rss version='2.0'><channel><title>site:www.migration.qld.gov.au/news - Google News</title>"
+      + entries + "</channel></rss>");
+  const title = "2024–25 State Nominated Migration Program Allocation &amp; eligibility";
+  reply(item(title, link + "?oc=5") + item(title, link + "?oc=1")
+    + item("News for Migration Agents", "https://news.google.com/rss/articles/nav")
+    + item("Other publisher", "https://news.google.com/rss/articles/foreign", source + ".example.com")
+    + item("Not a Google news link", "https://example.com/rss/articles/invalid"));
+  assert.deepEqual(await collectQueenslandNewsLeads(), { status: "ok", received: 5, found: 1, created: 1 });
+  const [lead] = await sql`SELECT id,title,url,published_at,published_at_claim,body_text,body_status,processing_queued_at,backfill
+    FROM articles WHERE source_id=${QUEENSLAND_LEADS_ID}`;
+  assert.equal(lead.title, "2024–25 State Nominated Migration Program Allocation & eligibility");
+  assert.equal(lead.url, link + "?oc=5");
+  assert.equal(lead.published_at, null);
+  assert.equal(lead.published_at_claim, null);
+  assert.equal(lead.body_text, null);
+  assert.equal(lead.body_status, "unconfirmed");
+  assert.equal(lead.processing_queued_at, null);
+  assert.equal(lead.backfill, true);
+
+  reply(item(title, link + "?oc=7"));
+  assert.deepEqual(await collectQueenslandNewsLeads(), { status: "ok", received: 1, found: 1, created: 0 });
+  const [summary] = await sql`SELECT count(*)::int AS n FROM articles WHERE source_id=${QUEENSLAND_LEADS_ID}`;
+  assert.equal(summary.n, 1);
+  const [visibility] = await sql`SELECT count(*)::int AS n FROM publications WHERE article_id=${lead.id}`;
+  assert.equal(visibility.n, 0);
+  const [official] = await sql`SELECT count(*)::int AS n FROM fetch_runs WHERE source_id='au-qld-news'`;
+  assert.equal(official.n, 0);
 });
