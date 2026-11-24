@@ -27,4 +27,10 @@ jobs:
           probe qld-www https://www.migration.qld.gov.au/news 'stories-list|story-wrapper' &
           probe tiq https://www.tiq.qld.gov.au/queensland-business/news-and-events/news 'news' &
           probe tga https://training.gov.au/organisation/details/90003 '_nuxt' &
+          probe tra-reader https://r.jina.ai/https://www.tradesrecognitionaustralia.gov.au/fees-1 'Job Ready' &
+          probe edu-reader https://r.jina.ai/https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status 'Current Snapshot' &
+          probe edu-pdf-reader https://r.jina.ai/https://www.education.gov.au/download/19465/visa-prioritisation-status/46510/current-snapshot/pdf 'Progress Against Indicative Allocations' &
+          probe qld-reader https://r.jina.ai/https://migration.qld.gov.au/news 'SNMP|State Nominated Migration Program' &
+          probe tga-api https://training.gov.au/api/organisation/90003 '"code":"90003"' &
+          probe tga-scope https://training.gov.au/api/organisation/90003/scopesummary 'trainingPackage|qualifications' &
           wait
