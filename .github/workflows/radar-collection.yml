@@ -2,7 +2,7 @@ name: Australia Policy Radar collection
 
 on:
   schedule:
-    - cron: '17 */4 * * *'
+    - cron: '23 */4 * * *'
   workflow_dispatch:
     inputs:
       qld_leads_only:
