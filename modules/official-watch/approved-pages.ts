@@ -136,7 +136,7 @@ export async function readTraFeesSnapshot() {
   const page = contentDocument(html);
   const title = page.querySelector("h1")?.textContent.trim() || "Trade Recognition Australia fees";
   const main = page.querySelector("main");
-  main?.querySelectorAll("script,style,nav,footer,header,form").forEach(node => node.remove());
+  for (const node of main?.querySelectorAll("script,style,nav,footer,header,form") ?? []) node.remove();
   return { ...readTraFees(html, clean(main?.textContent ?? title)), title };
 }
 
