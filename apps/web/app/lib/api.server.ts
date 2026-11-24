@@ -11,6 +11,7 @@ export const API_BASE_URL = process.env.API_BASE_URL
 // The protected preview's own SSR requests use Vercel's server-side bypass only on its exact host.
 const previewBypass = process.env.VERCEL_URL && API_BASE_URL === `https://${process.env.VERCEL_URL}`
   ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined;
+export const previewApiHeaders: Record<string, string> = previewBypass ? { "x-vercel-protection-bypass": previewBypass } : {};
 
 /** An api answer other than 2xx. A merged story answers 308 with the story it now lives in. */
 class ApiError extends Error {
@@ -28,8 +29,7 @@ class ApiError extends Error {
 export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers,
-        ...(previewBypass ? { "x-vercel-protection-bypass": previewBypass } : {}) },
+      headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers, ...previewApiHeaders },
       redirect: "manual",
       signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     });
