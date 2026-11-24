@@ -18,7 +18,7 @@ async function collect() {
   const [started] = await sql<{ at: Date }[]>`SELECT now() AS at`;
   const sources = await sql<{ id: string; kind: string }[]>`
     SELECT id, kind FROM sources WHERE enabled AND id LIKE 'au-%'
-      AND (${!retryFailed} OR health='degraded')
+      AND (${!retryFailed} OR health IN ('degraded', 'failing'))
       AND (kind IN ('rss', 'web_list', 'json_list') OR (kind='external' AND id=ANY(${Object.keys(WATCHES)}::text[])))
     ORDER BY id
   `;

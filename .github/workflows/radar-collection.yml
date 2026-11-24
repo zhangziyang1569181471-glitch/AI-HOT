@@ -35,5 +35,7 @@ jobs:
         env:
           NODE_ENV: production
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          RADAR_AU_COLLECTOR_ORIGIN: ${{ vars.RADAR_AU_COLLECTOR_ORIGIN }}
+          RADAR_AU_COLLECTOR_KEY: ${{ secrets.RADAR_AU_COLLECTOR_KEY }}
           COLLECT_ENABLED: 'true'
           MODEL_CALLS_ENABLED: 'false'

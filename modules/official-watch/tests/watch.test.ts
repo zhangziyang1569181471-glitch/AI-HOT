@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { syncBuiltinESMExports } from "node:module";
 import { after, mock, test } from "node:test";
 import timersPromises from "node:timers/promises";
+import { strToU8, zipSync } from "fflate";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { config } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
@@ -10,7 +11,7 @@ import { stopBoss } from "@aihot/backend/jobs/queue";
 import { watchOfficialPage } from "../watch.ts";
 import { parseTasmaniaRound } from "../tasmania.ts";
 import { readStudentPriorityRules } from "../government-snapshots.ts";
-import { cricosRecord, readEmployerSalaries, readTraFees, readTrainingRegister } from "../approved-pages.ts";
+import { cricosRecord, providerPriorityDocument, readEmployerSalaries, readTraFees, readTrainingRegister } from "../approved-pages.ts";
 
 const sourceId = "au-act-news";
 const dispatcher = getGlobalDispatcher();
@@ -193,5 +194,36 @@ test("TRA captures each published fee from the accessible table image", () => {
 
 test("registration watchers reject public search shells as registry data", () => {
   assert.throws(() => cricosRecord("<main>Institution Search</main>", "00586B"), /no public registration record/);
-  assert.throws(() => readTrainingRegister("<main>National Training Register</main>"), /no verified registration/);
+  const organisation = {
+    code: "90003", isRto: true, rtoStatusLabel: "Current",
+    legalNames: [{ name: "TAFE", startDate: "2025-01-01" }], tradingNames: [],
+    registrationManagers: [{ name: "ASQA", startDate: "2025-01-01" }],
+    registrations: [{ startDate: "2025-09-02", endDate: "2032-08-31", legalAuthority: "NVR Act", exerciser: "ASQA" }],
+    regulatoryDecisions: [{ isHistoric: true, reference: "RD0000652", decision: "Condition met", effectiveDate: "2022-06-06" }],
+  };
+  const scope = {
+    accreditedCourses: 1, accreditedUnitsExplicit: 2, accreditedUnitsImplicit: 3,
+    trainingPackages: [{ code: "ACM", title: "Animal Care and Management", qualifications: 6, skillSets: 15, unitsExplicit: 7, unitsImplicit: 163 }],
+  };
+  assert.throws(() => readTrainingRegister({ ...organisation, code: "90004" }, scope), /no verified registration/);
+  const snapshot = readTrainingRegister(organisation, scope);
+  assert.match(snapshot.text, /No current regulatory decisions\nHistoric \| RD0000652/);
+  assert.match(snapshot.text, /ACM \| Animal Care and Management \| 6 \| 15 \| 7 \| 163/);
+});
+
+test("Education snapshot reads provider codes and priorities from the current DOCX", () => {
+  const paragraph = (text: string) => "<w:p><w:r><w:t>" + text + "</w:t></w:r></w:p>";
+  const cell = (text: string) => "<w:tc>" + paragraph(text) + "</w:tc>";
+  const row = (code: string, priority: number) => "<w:tr>" + cell(code) + cell("Test Institute") + cell("Priority " + priority) + "</w:tr>";
+  const archive = (count: number) => {
+    const rows = Array.from({ length: count }, (_, i) => row((10000 + i) + "A", 2)).join("");
+    const xml = "<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body>"
+      + paragraph("International Education Providers – Progress Against Indicative Allocations") + "<w:tbl>" + rows + "</w:tbl></w:body></w:document>";
+    return zipSync({ "word/document.xml": strToU8(xml) });
+  };
+  const resource = "https://www.education.gov.au/download/1/visa-prioritisation-status/2/current-snapshot/docx";
+  const document = providerPriorityDocument(archive(10), resource);
+  assert.equal(document.evidence.records, 10);
+  assert.match(document.text, /10000A \| Test Institute \| Priority 2/);
+  assert.throws(() => providerPriorityDocument(archive(1), resource), /no readable provider priority rows/);
 });

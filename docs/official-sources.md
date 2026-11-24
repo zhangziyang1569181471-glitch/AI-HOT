@@ -14,7 +14,7 @@
 | `au-federal-legislation` | [联邦法规登记册 API](https://www.legislation.gov.au/help-and-resources/using-the-legislation-register/data-share-and-reuse) | 查找标题含 Migration 的新近登记文件，采用 asMadeRegisteredAt 的日历日和登记编号。 |
 | `au-nsw-news` | [新州移民新闻](https://www.nsw.gov.au/visas-and-migration/news-and-updates) | 新闻列表与 datetime；现阶段的近期技术迁移变化需结合下表项目正文。 |
 | `au-vic-news` | [维州州担保新闻](https://liveinmelbourne.vic.gov.au/news-events/news) | 新闻列表与原文日期。 |
-| `au-qld-news` | [昆州州担保新闻](https://migration.qld.gov.au/news) | 兼容 11 月 23 日核验的新旧列表样式。详情页明确标注 Last published 时按昆州 UTC+10 读取；新版未标注日期的项目保留缺省。 |
+| `au-qld-news` | [昆州州担保新闻](https://migration.qld.gov.au/news) | 兼容 11 月 23 日核验的新旧列表样式。详情页明确标注 Last published 时按昆州 UTC+10 读取；新版未标注日期的项目保留缺省。云端收到官网 HTTP 429 时按采集失败记录。 |
 | `au-sa-news` | [南澳移民项目新闻](https://migration.sa.gov.au/news) | 新闻列表与英文序数日期。 |
 | `au-wa-news` | [西澳州担保新闻](https://migration.wa.gov.au/news) | 新闻列表与带时区的 datetime。 |
 | `au-tas-news` | [塔州移民新闻](https://www.migration.tas.gov.au/news) | 新闻列表；下表两个原址更新的页面由独立任务监测。 |
@@ -45,16 +45,16 @@
 | `au-act-invitation-rankings` | [ACT Canberra Matrix 邀请排名](https://www.act.gov.au/migration/resources/library-guidelines-and-invitations) | 从资料库跟随最新项目年度的官方排名 PDF，读取轮次日期和分数表。 |
 | `au-visa-fees` | [内政部签证费用表](https://immi.homeaffairs.gov.au/visas/getting-a-visa/fees-and-charges/current-visa-pricing/) | 读取原页和其公开的 GetPriceList 查询，比较签证子类、各项费用及备注。 |
 | `au-student-visa-priorities` | [学生签证审理优先级](https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-processing-times/visa-processing-priorities/student-visa) | 监测境内外处理规则、优先级说明和部长指令链接。 |
-| `au-education-provider-priorities` | [教育部院校优先级](https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status) | 跟随 Current snapshot PDF，读取院校 CRICOS 编号、参考配额及优先级。 |
+| `au-education-provider-priorities` | [教育部院校优先级](https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status) | 从教育部原页查找当期 DOCX，读取院校 CRICOS 编号、参考配额及优先级。云端通过悉尼函数请求原页和文件。 |
 | `au-employer-salary-thresholds` | [雇主提名薪资要求](https://immi.homeaffairs.gov.au/employer-subsite/Pages/salary-requirements.aspx) | 读取官网嵌入的薪资页签，监测 CSIT、SSIT、TSMIT 的金额、适用日期与市场薪资规则。 |
 | `au-vic-points-test` | [维州 VPT](https://liveinmelbourne.vic.gov.au/migrate/skilled-migration-visas/vpt) | 监测七项排序要素、两个签证子类的 ROI 邀请及优先行业。 |
 | `au-skilled-visa-priorities` | [技术签证审理优先级](https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-processing-times/visa-processing-priorities/skilled-visa) | 监测临时、过渡及永久技术签证的排序规则与部长指令 PDF 链接。 |
 | `au-nsw-skills-lists` | [新州技术移民清单](https://www.nsw.gov.au/visas-and-migration/skilled-visas/nsw-skills-lists) | 读取实际 ANZSCO 职业组表，以及 190 和 491 的清单更新说明。 |
-| `au-tra-jrp-fees` | [TRA Job Ready Program 费用](https://www.tradesrecognitionaustralia.gov.au/fees-1) | 读取费用图表的官方替代文字、金额和图片链接。 |
+| `au-tra-jrp-fees` | [TRA Job Ready Program 费用](https://www.tradesrecognitionaustralia.gov.au/fees-1) | 从官方原页读取费用图表的替代文字、金额和图片链接。云端通过悉尼函数请求原页。 |
 | `au-cricos-register` | [CRICOS 官方名录](https://cricos.education.gov.au/) | 以塔斯马尼亚大学（00586B）和 TAFE NSW（00591E）试点，读取登记编号、容量、校区和原页展示的课程。 |
-| `au-national-training-register` | [国家培训登记册](https://training.gov.au/organisation/details/90003) | 以 TAFE NSW（RTO 90003）试点，读取注册状态、注册期限、监管决定栏与范围概览。 |
+| `au-national-training-register` | [国家培训登记册](https://training.gov.au/organisation/details/90003) | 以 TAFE NSW（RTO 90003）试点，通过登记册公开接口读取注册状态、注册期限、当前及历史监管决定与范围概览。 |
 
-两个名录按上述试点编号采集。教育部优先级 PDF、维州 VPT 和国家培训登记册使用公开网页读取服务获取文档或渲染后的内容。
+两个名录按上述试点编号采集。维州 VPT 使用公开网页读取服务获取渲染后的内容。
 
 监测首次读取时建立基线，有变化时记录同一原文的版本，重复读取保留采集记录。首次观察时间供核查使用，未确认的发布日期保持空白。法规登记日与生效日需分别核对。首次发现的历史公告保留原始日期。所有来源默认只公开摘要和原文链接。
 

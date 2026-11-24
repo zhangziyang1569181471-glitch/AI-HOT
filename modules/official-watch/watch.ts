@@ -12,18 +12,15 @@ import {
   type EnrichedWatch, type WatchEvidence,
 } from "./government-snapshots.ts";
 import {
-  CRICOS_PRIMARY, EMPLOYER_SALARIES, NSW_SKILLS_LISTS, PROVIDER_PRIORITIES, SKILLED_PROCESSING_PRIORITIES,
+  australianWatchTransport, CRICOS_PRIMARY, EMPLOYER_SALARIES, NSW_SKILLS_LISTS, PROVIDER_PRIORITIES, SKILLED_PROCESSING_PRIORITIES,
   TRA_FEES, TRAINING_REGISTER_RTO, VICTORIAN_POINTS_TEST, readCricosRecords, readEmployerSalaries, readNswSkillsLists,
-  readProviderPriorities, readSkilledPriorityRules, readTraFees, readTrainingRegister, readVictorianPointsTest,
+  readProviderPriorities, readSkilledPriorityRules, readTraFeesSnapshot, readTrainingRegisterSnapshot, readVictorianPointsTest,
 } from "./approved-pages.ts";
 
-interface WatchSpec {
-  url: string;
-  selector: string;
-  direct?: true;
-  english?: true;
-  enrich?: (html: string, pageText: string) => EnrichedWatch | Promise<EnrichedWatch>;
-}
+type WatchSpec = { url: string } & (
+  | { read: () => Promise<EnrichedWatch & { title: string }>; transport: "public-json" | "direct-https" | "regional-https"; }
+  | { selector: string; direct?: true; english?: true; enrich?: (html: string, pageText: string) => EnrichedWatch | Promise<EnrichedWatch>; }
+);
 
 // These official pages amend their existing text rather than publishing dated news entries.
 export const WATCHES: Record<string, WatchSpec> = {
@@ -36,19 +33,23 @@ export const WATCHES: Record<string, WatchSpec> = {
   "au-tas-roi": { url: "https://www.migration.tas.gov.au/news/important-update-roi-system-currently-offline", selector: "main" },
   "au-tas-rounds": { url: "https://www.migration.tas.gov.au/news/processing_times_and_allocation_usage", selector: "main" },
   "au-nsw-skilled": { url: "https://www.nsw.gov.au/visas-and-migration/skilled-visas", selector: "main", direct: true },
-  "au-education-provider-priorities": { url: PROVIDER_PRIORITIES, selector: "main", direct: true, enrich: readProviderPriorities },
+  "au-education-provider-priorities": { url: PROVIDER_PRIORITIES, read: readProviderPriorities, transport: australianWatchTransport },
   "au-employer-salary-thresholds": { url: EMPLOYER_SALARIES, selector: "main", direct: true, english: true, enrich: readEmployerSalaries },
   "au-vic-points-test": { url: VICTORIAN_POINTS_TEST, selector: "main", enrich: readVictorianPointsTest },
   "au-skilled-visa-priorities": { url: SKILLED_PROCESSING_PRIORITIES, selector: "main", direct: true, english: true, enrich: readSkilledPriorityRules },
   "au-nsw-skills-lists": { url: NSW_SKILLS_LISTS, selector: "main", direct: true, enrich: readNswSkillsLists },
-  "au-tra-jrp-fees": { url: TRA_FEES, selector: "main", direct: true, enrich: readTraFees },
+  "au-tra-jrp-fees": { url: TRA_FEES, read: readTraFeesSnapshot, transport: australianWatchTransport },
   "au-cricos-register": { url: CRICOS_PRIMARY, selector: "#content", direct: true, enrich: readCricosRecords },
-  "au-national-training-register": { url: TRAINING_REGISTER_RTO, selector: "#summaryTab", enrich: readTrainingRegister },
+  "au-national-training-register": { url: TRAINING_REGISTER_RTO, read: readTrainingRegisterSnapshot, transport: "public-json" },
 };
 
 export async function readOfficialPage(id: string): Promise<ReturnType<typeof pageSnapshot> & { evidence?: WatchEvidence }> {
   const spec = WATCHES[id];
   if (!spec) throw new Error("Unknown official page");
+  if ("read" in spec) {
+    const snapshot = await spec.read();
+    return { ...snapshot, hash: sha256(snapshot.text) };
+  }
   const raw = spec.direct
     ? requireOk(await guardedFetch(spec.url, { headers: { "user-agent": "node", accept: "*/*", ...(spec.english ? { "accept-language": "en-AU,en;q=0.9" } : {}) }, timeoutMs: 20_000 })).text()
     : (await jinaRead(spec.url, { purpose: "official_page_watch", subject: `source:${id}`, anonymous: true, format: "html", cacheToleranceSeconds: 900 })).raw;
@@ -102,7 +103,7 @@ export async function watchOfficialPage(id: string, force = false): Promise<Watc
         sourceId: id, identityKey: `official-page:${id}`, url: spec.url,
         title: snapshot.title, bodyText: snapshot.text, bodyStatus: "ok", publishedAt: null,
         language: "en", via: "official-page-watch",
-        raw: { officialWatch: { publicationDateUnknown: true, transport: spec.direct ? "direct-https" : "anonymous-reader", ...proof } },
+        raw: { officialWatch: { publicationDateUnknown: true, transport: "transport" in spec ? spec.transport : spec.direct ? "direct-https" : "anonymous-reader", ...proof } },
       }, tx);
       if (material.created || material.revised) await queueProcessing(material.articleId, { db: tx });
       const cursor = { ...source.cursor, officialWatch: {

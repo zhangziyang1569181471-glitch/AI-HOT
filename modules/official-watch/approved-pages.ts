@@ -1,7 +1,7 @@
+import { strFromU8, unzipSync } from "fflate";
 import { guardedFetch, requireOk } from "@aihot/backend/lib/http-fetch";
 import { contentDocument } from "@aihot/backend/lib/page-content";
 import { collapseWhitespace, stripTags } from "@aihot/backend/lib/text";
-import { jinaRead } from "@aihot/backend/providers/jina";
 import { ministerialDirectionLinks, type EnrichedWatch } from "./government-snapshots.ts";
 
 export const PROVIDER_PRIORITIES = "https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status";
@@ -13,23 +13,63 @@ export const TRA_FEES = "https://www.tradesrecognitionaustralia.gov.au/fees-1";
 
 const clean = (value: string) => collapseWhitespace(value.replace(/[\u200b-\u200d\ufeff]/g, ""));
 
-export async function readProviderPriorities(html: string): Promise<EnrichedWatch> {
-  const links = [...contentDocument(html).querySelectorAll("main a[href]")];
-  const files = links.map(link => new URL(link.getAttribute("href")!, PROVIDER_PRIORITIES));
-  const pdf = files.find(url => url.origin === new URL(PROVIDER_PRIORITIES).origin && !url.username && !url.password
-    && /^\/download\/\d+\/visa-prioritisation-status\/\d+\/current-snapshot\/pdf\/?$/i.test(url.pathname));
-  if (!pdf) throw new Error("Education Department page has no current snapshot PDF");
-  const resource = pdf.toString();
-  const { markdown } = await jinaRead(resource, {
-    purpose: "education_provider_priorities", subject: "source:au-education-provider-priorities",
-    anonymous: true, cacheToleranceSeconds: 900,
-  });
-  const records = new Set([...markdown.matchAll(/^\s*\|?\s*(\d{5}[A-Z])(?:\s+|\s*\|).+?\bPriority\s+[123]\b/gim)].map(match => match[1]));
-  if (!/International Education Providers/i.test(markdown)
-    || !/Progress Against Indicative Allocations/i.test(markdown) || records.size < 10) {
-    throw new Error("Education Department PDF has no readable provider priority rows");
+type AustralianResource = "provider-index" | "provider-document" | "tra-fees";
+
+const australianOrigin = process.env.RADAR_AU_COLLECTOR_ORIGIN;
+const australianCollectorKey = process.env.RADAR_AU_COLLECTOR_KEY;
+
+async function australianDocument(resource: AustralianResource, publisherUrl: string) {
+  const options = { timeoutMs: 25_000, maxBytes: 2 * 1024 * 1024, redirectPolicy: "same-origin" as const };
+  if (!australianOrigin && !australianCollectorKey) {
+    return requireOk(await guardedFetch(publisherUrl, { ...options, headers: { "accept-language": "en-AU,en;q=0.9" } }), resource);
   }
-  return { text: resource + "\n\n" + markdown.trim(), evidence: { resources: [resource], records: records.size } };
+  const relay = australianOrigin ? new URL(australianOrigin) : null;
+  if (!relay || relay.protocol !== "https:" || !relay.hostname.endsWith(".vercel.app")
+    || relay.port || relay.username || relay.password || !australianCollectorKey) {
+    throw new Error("Australian government collector requires a Vercel HTTPS origin and an automation secret");
+  }
+  const target = new URL("/api/official-source", relay);
+  target.searchParams.set("resource", resource);
+  if (resource === "provider-document") target.searchParams.set("path", new URL(publisherUrl).pathname);
+  return requireOk(await guardedFetch(target.toString(), {
+    ...options, maxRedirects: 0,
+    headers: { authorization: "Bearer " + australianCollectorKey, "x-vercel-protection-bypass": australianCollectorKey },
+  }), resource);
+}
+
+export const australianWatchTransport = australianOrigin ? "regional-https" : "direct-https";
+
+export function providerPriorityDocument(archive: Uint8Array, resource: string): EnrichedWatch {
+  const wordPath = "word/document.xml";
+  const xml = unzipSync(archive, { filter: item => item.name === wordPath && item.originalSize <= 4 * 1024 * 1024 })[wordPath];
+  if (!xml) throw new Error("Education Department DOCX has no readable document XML");
+  const document = contentDocument(strFromU8(xml));
+  const line = (node: { querySelectorAll(selector: string): Iterable<{ textContent: string }> }) =>
+    clean([...node.querySelectorAll("w\\:t")].map(part => part.textContent).join(""));
+  const text = [...document.querySelectorAll("w\\:p, w\\:tr")].flatMap(node => {
+    if (node.localName === "w:tr") {
+      return [[...node.querySelectorAll("w\\:tc")].map(line).join(" | ")];
+    }
+    return node.closest("w\\:tr") ? [] : [line(node)];
+  }).filter(Boolean).join("\n");
+  const records = new Set([...text.matchAll(/^\s*(\d{5}[A-Z])\s*\|.+?\bPriority\s+[123]\b/gim)].map(match => match[1]));
+  if (!/International Education Providers/i.test(text)
+    || !/Progress Against Indicative Allocations/i.test(text) || records.size < 10) {
+    throw new Error("Education Department DOCX has no readable provider priority rows");
+  }
+  return { text: resource + "\n\n" + text, evidence: { resources: [PROVIDER_PRIORITIES, resource], records: records.size } };
+}
+
+export async function readProviderPriorities() {
+  const index = await australianDocument("provider-index", PROVIDER_PRIORITIES);
+  const links = [...contentDocument(index.text()).querySelectorAll("main a[href]")];
+  const files = links.map(link => new URL(link.getAttribute("href")!, PROVIDER_PRIORITIES));
+  const docx = files.find(url => url.origin === new URL(PROVIDER_PRIORITIES).origin && !url.username && !url.password
+    && /^\/download\/\d+\/visa-prioritisation-status\/\d+\/current-snapshot\/docx\/?$/i.test(url.pathname));
+  if (!docx) throw new Error("Education Department page has no current snapshot DOCX");
+  const resource = docx.toString();
+  const document = await australianDocument("provider-document", resource);
+  return { ...providerPriorityDocument(document.body, resource), title: "Visa Prioritisation Status – Current snapshot" };
 }
 
 export function readEmployerSalaries(html: string, pageText: string): EnrichedWatch {
@@ -90,6 +130,16 @@ export function readTraFees(html: string, text: string): EnrichedWatch {
   return { text: [text, fees, image.toString()].join("\n"), evidence: { resources: [TRA_FEES, image.toString()], records: amounts.length } };
 }
 
+export async function readTraFeesSnapshot() {
+  const response = await australianDocument("tra-fees", TRA_FEES);
+  const html = response.text();
+  const page = contentDocument(html);
+  const title = page.querySelector("h1")?.textContent.trim() || "Trade Recognition Australia fees";
+  const main = page.querySelector("main");
+  main?.querySelectorAll("script,style,nav,footer,header,form").forEach(node => node.remove());
+  return { ...readTraFees(html, clean(main?.textContent ?? title)), title };
+}
+
 function cricosInstitution(code: string) {
   return "https://cricos.education.gov.au/Institution/InstitutionDetails.aspx?ProviderCode=" + code;
 }
@@ -130,29 +180,72 @@ export async function readCricosRecords(primaryHtml: string): Promise<EnrichedWa
   };
 }
 
-export function readTrainingRegister(html: string): EnrichedWatch {
-  const doc = contentDocument(html);
-  const fields = new Map([...doc.querySelectorAll("#summaryTab table tr")].flatMap(row => {
-    const cells = [...row.querySelectorAll("td")].map(cell => clean(cell.textContent));
-    return cells.length === 2 ? [[cells[0]!, cells[1]!] as const] : [];
-  }));
-  const decisions = clean(doc.querySelector("#ASQARegDecInfo")?.textContent ?? "");
-  const scope = doc.querySelector('[role="tabpanel"][id^="scope_overviewtab_"]');
-  const scopeCounts = [...(scope?.querySelectorAll("li") ?? [])].map(item => clean(item.textContent))
-    .filter(label => /^[\d,]+\s+accredited (?:courses|units)\b/i.test(label));
-  const scopeRows = [...(scope?.querySelectorAll("tbody tr") ?? [])].flatMap(row => {
-    const cells = [...row.querySelectorAll("td")].map(cell => clean(cell.textContent));
-    return cells.length > 1 && cells[0] ? [cells.join(" | ")] : [];
-  }).sort();
-  if (fields.get("Code") !== "90003" || !fields.get("Legal name") || !fields.get("Status")
-    || !fields.get("Registration manager") || !decisions || !scope || !(scopeRows.length || scopeCounts.length)) {
+const TRAINING_ORGANISATION = "https://training.gov.au/api/organisation/90003?include=all";
+const TRAINING_SCOPE = "https://training.gov.au/api/organisation/90003/scopesummary";
+
+type RegisterEntry = { startDate: string; endDate?: string };
+type TrainingOrganisation = {
+  code: string;
+  isRto: boolean;
+  rtoStatusLabel: string;
+  legalNames: (RegisterEntry & { name: string })[];
+  tradingNames: (RegisterEntry & { name: string })[];
+  registrationManagers: (RegisterEntry & { name: string })[];
+  registrations: (RegisterEntry & { legalAuthority: string; exerciser: string })[];
+  regulatoryDecisions: { isHistoric: boolean; reference: string; decision: string; effectiveDate: string }[];
+};
+type TrainingScope = {
+  accreditedCourses: number;
+  accreditedUnitsExplicit: number;
+  accreditedUnitsImplicit: number;
+  trainingPackages: { code: string; title: string; qualifications: number; skillSets: number; unitsExplicit: number; unitsImplicit: number }[];
+};
+
+export function readTrainingRegister(organisation: TrainingOrganisation, scope: TrainingScope): EnrichedWatch {
+  const latest = <T extends RegisterEntry>(entries: T[] | undefined) =>
+    entries?.reduce<T | undefined>((record, entry) => !record || entry.startDate > record.startDate ? entry : record, undefined);
+  const name = latest(organisation.legalNames)?.name;
+  const tradingName = latest(organisation.tradingNames)?.name;
+  const manager = latest(organisation.registrationManagers)?.name;
+  const registration = latest(organisation.registrations);
+  if (organisation.code !== "90003" || !organisation.isRto || !name || !manager || !registration?.startDate
+    || !organisation.rtoStatusLabel || !Number.isInteger(scope.accreditedCourses)
+    || !Number.isInteger(scope.accreditedUnitsExplicit) || !Number.isInteger(scope.accreditedUnitsImplicit)
+    || !Array.isArray(organisation.regulatoryDecisions) || !Array.isArray(scope.trainingPackages)
+    || scope.trainingPackages.some(item => !item.code || !item.title
+      || ![item.qualifications, item.skillSets, item.unitsExplicit, item.unitsImplicit].every(Number.isInteger))
+    || organisation.regulatoryDecisions.some(item => typeof item.isHistoric !== "boolean" || !item.reference || !item.decision)) {
     throw new Error("National Training Register returned no verified registration, decisions and scope for RTO 90003");
   }
-  const labels = ["Code", "Legal name", "Business name(s)", "Status", "Registration manager", "Initial registration date",
-    "Start date", "End date", "Legal authority", "Exerciser"];
-  return {
-    text: [...labels.filter(label => fields.has(label)).map(label => label + ": " + fields.get(label)),
-      decisions, ...scopeCounts, ...scopeRows].join("\n"),
-    evidence: { resources: [TRAINING_REGISTER_RTO], records: 1 },
-  };
+  const decisions = organisation.regulatoryDecisions.map(item =>
+    [item.isHistoric ? "Historic" : "Current", item.reference, item.effectiveDate, clean(item.decision)].join(" | ")).sort();
+  const packages = scope.trainingPackages.map(item =>
+    [item.code, clean(item.title), item.qualifications, item.skillSets, item.unitsExplicit, item.unitsImplicit].join(" | ")).sort();
+  const text = [
+    "Code: " + organisation.code,
+    "Legal name: " + name,
+    tradingName ? "Business name: " + tradingName : "",
+    "Status: " + organisation.rtoStatusLabel,
+    "Registration manager: " + manager,
+    "Start date: " + registration.startDate,
+    registration.endDate ? "End date: " + registration.endDate : "",
+    registration.legalAuthority ? "Legal authority: " + registration.legalAuthority : "",
+    registration.exerciser ? "Exerciser: " + registration.exerciser : "",
+    organisation.regulatoryDecisions.some(item => !item.isHistoric) ? "" : "No current regulatory decisions",
+    ...decisions,
+    "Accredited courses: " + scope.accreditedCourses,
+    "Accredited units (explicit): " + scope.accreditedUnitsExplicit,
+    "Accredited units (implicit): " + scope.accreditedUnitsImplicit,
+    "Training packages (code | title | qualifications | skill sets | explicit units | implicit units)",
+    ...packages,
+  ].filter(Boolean).join("\n");
+  return { text, evidence: { resources: [TRAINING_REGISTER_RTO, TRAINING_ORGANISATION, TRAINING_SCOPE], records: 1 } };
+}
+
+export async function readTrainingRegisterSnapshot() {
+  const fetchJson = async (url: string) => JSON.parse(requireOk(await guardedFetch(url, {
+    headers: { accept: "application/json" }, redirectPolicy: "same-origin", timeoutMs: 20_000,
+  }), "training register data").text());
+  const [organisation, scope] = await Promise.all([fetchJson(TRAINING_ORGANISATION), fetchJson(TRAINING_SCOPE)]);
+  return { ...readTrainingRegister(organisation, scope), title: "National Training Register – RTO 90003 (TAFE NSW)" };
 }

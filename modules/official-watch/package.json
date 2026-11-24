@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./module.ts", "./server": "./server.ts", "./watch": "./watch.ts", "./web": "./web.tsx" },
-  "dependencies": { "@aihot/backend": "*", "@aihot/contracts": "*" }
+  "dependencies": { "@aihot/backend": "*", "@aihot/contracts": "*", "fflate": "0.7.5" }
 }

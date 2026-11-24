@@ -5,6 +5,7 @@
   "outputDirectory": "apps/web/build/client",
   "regions": ["syd1"],
   "functions": {
+    "api/official-source.mjs": { "maxDuration": 30 },
     "api/radar.mjs": {
       "includeFiles": "{site/public/**,site/brand/**,site/pages/**,site/changelog.json,industry/*.json,industry/prompts/**,assets/og-fonts/**,modules/*/public/**,node_modules/harfbuzzjs/*.wasm}",
       "maxDuration": 60
