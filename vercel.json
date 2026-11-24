@@ -6,7 +6,7 @@
   "regions": ["syd1"],
   "functions": {
     "api/radar.mjs": {
-      "includeFiles": "{site/public/**,site/brand/**,site/pages/*.md,industry/*.json,assets/og-fonts/**,modules/*/public/**,node_modules/harfbuzzjs/*.wasm}",
+      "includeFiles": "{site/public/**,site/brand/**,site/pages/**,site/changelog.json,industry/*.json,industry/prompts/**,assets/og-fonts/**,modules/*/public/**,node_modules/harfbuzzjs/*.wasm}",
       "maxDuration": 60
     }
   },
