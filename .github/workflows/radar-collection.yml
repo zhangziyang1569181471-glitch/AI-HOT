@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '17 */4 * * *'
   workflow_dispatch:
+    inputs:
+      retry_failed:
+        description: Retry degraded official sources only
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,7 +31,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Collect official sources
-        run: node scripts/collect-official-once.ts
+        run: node scripts/collect-official-once.ts ${{ inputs.retry_failed && '--retry-failed' || '' }}
         env:
           NODE_ENV: production
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}

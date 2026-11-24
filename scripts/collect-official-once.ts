@@ -14,19 +14,29 @@ if (!process.env.DATABASE_URL || process.env.COLLECT_ENABLED !== "true" || proce
 installModules(SERVER_MODULES);
 
 async function collect() {
+  const retryFailed = process.argv.includes("--retry-failed");
   const [started] = await sql<{ at: Date }[]>`SELECT now() AS at`;
   const sources = await sql<{ id: string; kind: string }[]>`
     SELECT id, kind FROM sources WHERE enabled AND id LIKE 'au-%'
+      AND (${!retryFailed} OR health='degraded')
       AND (kind IN ('rss', 'web_list', 'json_list') OR (kind='external' AND id=ANY(${Object.keys(WATCHES)}::text[])))
     ORDER BY id
   `;
-  if (!sources.length) throw new Error("No enabled Australian official sources were found");
+  if (!sources.length && !retryFailed) throw new Error("No enabled Australian official sources were found");
 
   const results = [];
-  for (const source of sources) {
+  const fetchSource = async (source: typeof sources[number]) => {
     const result = source.kind === "external" ? await watchOfficialPage(source.id) : await collectSource(source.id);
-    results.push(result);
     console.log(JSON.stringify({ sourceId: source.id, status: result.status, created: "created" in result ? Number(result.created) : 0 }));
+    return result;
+  };
+  for (const source of sources) {
+    results.push(await fetchSource(source));
+  }
+  for (const [i, result] of results.entries()) {
+    if (result.status === "failed" && /timeout|timed out|HTTP 429/i.test(result.error ?? "")) {
+      results[i] = await fetchSource(sources[i]!);
+    }
   }
 
   const materials = await sql<{ id: string }[]>`
