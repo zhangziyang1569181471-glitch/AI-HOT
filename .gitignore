@@ -16,3 +16,4 @@ package/
 fontsource-noto-sans-sc-*.tgz
 .vercel/
 .env.local
+deploy/vercel/runtime/

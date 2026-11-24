@@ -6,11 +6,11 @@ import { logError } from "@aihot/backend/lib/log-error";
 import { installModules } from "@aihot/backend/modules";
 import { DEPLOYMENT } from "@aihot/site";
 import { SERVER_MODULES } from "@aihot/site/modules/server";
-import { buildApp } from "../apps/api/src/app.ts";
-import { createWebRenderer, pageResponse } from "../apps/web/server-render.ts";
+import { buildApp } from "../../apps/api/src/app.ts";
+import { createWebRenderer, pageResponse } from "../../apps/web/server-render.ts";
 
-// Created by the Vercel build command. The static import path lets its tracer include the SSR build.
-const build = await import("../apps/web/build/server/index.js") as ServerBuild;
+// The Vercel build first compiles the React Router application, then bundles both servers.
+const build = await import("../../apps/web/build/server/index.js") as ServerBuild;
 const render = createWebRenderer(build);
 installModules(SERVER_MODULES);
 assertProductionSecrets([["auth", "SESSION_SECRET"], ["auth", "IMG_PROXY_SIGN_SECRET"], ...DEPLOYMENT.requiredSecrets]);

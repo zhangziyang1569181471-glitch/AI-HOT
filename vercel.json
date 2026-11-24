@@ -1,12 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npm run build -w @aihot/web",
+  "buildCommand": "npm run build -w @aihot/web && node deploy/vercel/bundle.mjs",
   "outputDirectory": "apps/web/build/client",
   "regions": ["syd1"],
   "functions": {
-    "api/radar.ts": {
-      "includeFiles": "{site/public/**,site/brand/**,industry/*.json,modules/*/public/**}",
+    "api/radar.mjs": {
+      "includeFiles": "{site/public/**,site/brand/**,site/pages/*.md,industry/*.json,assets/og-fonts/**,modules/*/public/**}",
       "maxDuration": 60
     }
   },
