@@ -5,27 +5,32 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     steps:
-      - name: Probe official endpoints
+      - name: Compare public Queensland news index to the official page
         shell: bash
         run: |
-          probe() {
-            local name="$1" url="$2" marker="$3" output="$(mktemp)"
-            local result
-            result="$(curl --location --connect-timeout 10 --max-time 30 --silent --show-error --user-agent 'Mozilla/5.0 (compatible; PolicyRadar/1.0)' --header 'Accept-Language: en-AU,en;q=0.9' --header "X-Return-Format: ${4:-markdown}" --header "X-Cache-Tolerance: ${5:-900}" --output "$output" --write-out '%{http_code} %{remote_ip} %{size_download} %{url_effective}' "$url" 2>&1)" || true
-            local match=no
-            if grep -aiqE "$marker" "$output"; then match=yes; fi
-            echo "RADARPROBE $name [$result] content=$match"
-          }
-          probe edu-html https://r.jina.ai/https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status '46510|current-snapshot/pdf' html &
-          probe edu-bare https://r.jina.ai/https://education.gov.au/managed-system-international-education/resources/visa-prioritisation-status 'current-snapshot/pdf' &
-          probe edu-with-slash https://r.jina.ai/https://www.education.gov.au/managed-system-international-education/resources/visa-prioritisation-status/ 'current-snapshot/pdf' &
-          probe tra-faq https://r.jina.ai/https://www.tradesrecognitionaustralia.gov.au/how-much-does-program-cost-1 '2,845|Job Ready Workplace Assessment' &
-          probe tra-program https://r.jina.ai/https://www.tradesrecognitionaustralia.gov.au/our-programs/job-ready-program '2,845|Job Ready Workplace Assessment' &
-          probe tra-gov-law https://www.legislation.gov.au/F2023L00320/latest/text '2,845|Job Ready Program Workplace Assessment' &
-          probe tra-fees-html https://r.jina.ai/https://www.tradesrecognitionaustralia.gov.au/fees-1 'assessment service fees' html &
-          probe qld-html https://r.jina.ai/https://migration.qld.gov.au/news 'stories-list|story-wrapper|href="/news/' html &
-          probe qld-detail https://r.jina.ai/https://migration.qld.gov.au/news/2026-27-queenslands-state-nominated-migration-program-now-published '2026-27' html &
-          probe tga-all 'https://training.gov.au/api/organisation/90003?include=all' 'Technical and Further Education Commission' &
-          wait
+          curl --fail --location --silent --show-error --max-time 25 \
+            'https://news.google.com/rss/search?q=site%3Awww.migration.qld.gov.au%2Fnews&hl=en-AU&gl=AU&ceid=AU%3Aen' \
+            -o "$RUNNER_TEMP/queensland-news.xml"
+          python3 - "$RUNNER_TEMP/queensland-news.xml" <<'PY'
+          import json
+          import sys
+          import xml.etree.ElementTree as ET
+          from urllib.parse import urlparse
+
+          items = ET.parse(sys.argv[1]).findall("./channel/item")
+          accepted = []
+          for item in items:
+              source = item.find("source")
+              if source is not None and urlparse(source.get("url", "")).hostname in {"migration.qld.gov.au", "www.migration.qld.gov.au"}:
+                  accepted.append(item)
+          headline = next((item.findtext("title") for item in accepted if "2026-27 SNMP now published" in item.findtext("title", "")), None)
+          archive = next((item.findtext("pubDate") for item in accepted if "State Nominated Migration Program Allocation" in item.findtext("title", "") and "2024" in item.findtext("title", "")), None)
+          domains = sorted({urlparse(item.findtext("link", "")).hostname or "" for item in accepted})
+          print("RADARPROBE " + json.dumps({"items": len(items), "publisher_matches": len(accepted), "known_announcement": headline, "archive_index_date": archive, "item_link_domains": domains}, ensure_ascii=False))
+          if not headline:
+              sys.exit("The indexed feed did not contain the known Queensland announcement")
+          PY
+          official=$(curl --location --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' 'https://www.migration.qld.gov.au/news')
+          echo "RADARPROBE official_news_http=$official"
