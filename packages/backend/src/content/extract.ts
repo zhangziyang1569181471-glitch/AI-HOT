@@ -795,7 +795,7 @@ export function readableDocument(document: Doc, url: string, rules: PageRules = 
   return { html: clean, text, images, via: "readability", ...date, cover: hasPicture(clean) ? null : declared };
 }
 
-export async function extractFromUrl(url: string, subject: string, rules: PageRules = {}, opts: { paidFallback?: boolean } = {}): Promise<ExtractedBody | null> {
+export async function extractFromUrl(url: string, subject: string, rules: PageRules = {}, opts: { paidFallback?: boolean; jinaMode?: "anonymous"; cacheToleranceSeconds?: number } = {}): Promise<ExtractedBody | null> {
   if (isVideoPageUrl(url)) return null;
   const target = new URL(url);
   if (rules.bodyUrlSuffix) target.pathname += rules.bodyUrlSuffix;
@@ -824,7 +824,7 @@ export async function extractFromUrl(url: string, subject: string, rules: PageRu
   try {
     // The rendered text carries none of the page's metadata, so a body read this way has no cover.
     const extra = (DEPLOYMENT as { renderedArticleRemoveSelectors?: Record<string, string> }).renderedArticleRemoveSelectors?.[target.hostname];
-    const page = await jinaRead(target.href, { purpose: "body_fallback", subject, removeSelector: extra ? `${PAGE_CHROME},${extra}` : PAGE_CHROME });
+    const page = await jinaRead(target.href, { purpose: "body_fallback", subject, removeSelector: extra ? `${PAGE_CHROME},${extra}` : PAGE_CHROME, cacheToleranceSeconds: opts.cacheToleranceSeconds, anonymous: opts.jinaMode === "anonymous" });
     const html = markdownBody(page.markdown, url);
     const text = stripTags(html);
     if (text.length < MIN_BODY_CHARS) return null;
@@ -853,7 +853,7 @@ export async function extractArticleBody(articleId: string): Promise<"ok" | "unc
     FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.id = ${articleId}`;
   if (!a || a.body_status === "ok") return "skipped";
   if (a.x_post?.tweetId) return extractXArticle(a.id, a.x_post.tweetId, a.revision);
-  const got = await extractFromUrl(a.url, `article:${a.id}`, pageRules(a.config));
+  const got = await extractFromUrl(a.url, `article:${a.id}`, pageRules(a.config), { jinaMode: a.config.jinaMode, cacheToleranceSeconds: a.config.cacheToleranceSeconds });
   if (!got) {
     return markUnconfirmed(articleId, a.revision);
   }

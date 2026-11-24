@@ -56,6 +56,10 @@ export function toDate(v: unknown, unit: string | undefined, utcOffset: string |
     const m = /^(\d{4})(\d{2})(\d{2})$/.exec(text);
     return m ? readPublicationDate(`${m[1]}-${m[2]}-${m[3]}`, utcOffset) : unknown;
   }
+  if (unit === "iso_day") {
+    const day = /^(\d{4}-\d{2}-\d{2})(?:$|T\d{2}:\d{2})/.exec(text)?.[1];
+    return readPublicationDate(day);
+  }
   return readPublicationDate(text, utcOffset);
 }
 
@@ -149,7 +153,7 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
   const embedded = c.mode === "html_json_key" || c.mode === "html_window_var";
   // A page that blocks our addresses can be read through Jina's rendered HTML, which keeps its scripts.
   const text = embedded && url.startsWith(JINA_PREFIX)
-    ? (await jinaRead(url.slice(JINA_PREFIX.length), { purpose: "source_listing", subject: `source:${source.id}`, format: "html", perRead: true })).markdown
+    ? (await jinaRead(url.slice(JINA_PREFIX.length), { purpose: "source_listing", subject: `source:${source.id}`, format: "html", cacheToleranceSeconds: source.config.cacheToleranceSeconds, perRead: true, anonymous: source.config.jinaMode === "anonymous" })).markdown
     : requireOk(await fetchListing(url, {
       redirectPolicy: "same-origin",
       method: c.method ?? "GET",

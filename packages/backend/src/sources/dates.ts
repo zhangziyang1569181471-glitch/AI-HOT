@@ -49,7 +49,9 @@ export function parseLooseDate(value: string | null | undefined, utcOffset = "+0
     if (!Number.isFinite(month) || !calendarDay(english[3]!, new Date(month).getUTCMonth() + 1, english[2]!)) return null;
   }
   if (!numeric && !english) return null;
-  const text = v.replace(/(\d)(st|nd|rd|th)\b/gi, "$1");
+  // Some publishers put the clock before the weekday/date, an order V8 does not accept.
+  const text = v.replace(/(\d)(st|nd|rd|th)\b/gi, "$1")
+    .replace(/^(\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M),\s+(.+)$/i, "$2 $1");
   if (EXPLICIT_ZONE.test(v)) {
     const direct = Date.parse(text);
     if (Number.isFinite(direct)) return new Date(direct);

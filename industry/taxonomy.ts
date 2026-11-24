@@ -18,7 +18,7 @@ export const TOPIC_TAGS = [
   "技术移民", "州担保", "雇主担保", "学生签证", "毕业生签证", "家庭签证", "访客签证", "职业评估", "英语要求", "工作权利", "移民规划", "院校合规",
   "189", "190", "491", "482", "186", "494", "500", "485", "EOI", "ROI", "DAMA", "NSW", "VIC", "QLD", "SA", "WA", "TAS", "ACT", "NT",
 ] as const;
-export const ENTITY_TAGS = ["Home Affairs", "教育部", "TEQSA", "ASQA", "OMARA", "Migration NSW", "Migration Victoria", "Migration Queensland", "Migration SA", "Migration WA", "Migration Tasmania", "ACT Migration", "Migration NT", "Study Australia"] as const;
+export const ENTITY_TAGS = ["Home Affairs", "教育部", "TEQSA", "ASQA", "OMARA", "Migration NSW", "Migration Victoria", "Migration Queensland", "Migration SA", "Migration WA", "Migration Tasmania", "ACT Migration", "Migration NT", "Study Australia", "JSA", "ABS", "DEWR", "Fair Work", "联邦法规"] as const;
 export const TAG_SYNONYMS: Readonly<Record<string, string>> = {
   政策: "政策变化", 法规: "政策变化", "政策/监管": "政策变化", 项目: "项目更新", 邀请: "邀请与配额", 配额: "邀请与配额", 费用: "费用与审理", 审理: "费用与审理",
   指南: "申请指南", 教程: "申请指南", "教程/实践": "申请指南", 研究: "数据报告", 报告: "数据报告", 解读: "政策解读", 观点: "政策解读", 监管: "监管执法", 执法: "监管执法",
@@ -40,6 +40,14 @@ export const ENTITIES: Record<string, { name: string; displayTag: string | null;
   asqa: { name: "ASQA", displayTag: "ASQA", aliases: ["ASQA", "Australian Skills Quality Authority"], orgNames: ["ASQA"] },
   omara: { name: "OMARA", displayTag: "OMARA", aliases: ["OMARA", "Office of the Migration Agents Registration Authority"], orgNames: ["OMARA"] },
   "study-australia": { name: "Study Australia", displayTag: "Study Australia", aliases: ["Study Australia", "Austrade", "Australian Trade and Investment Commission"], orgNames: ["Study Australia", "Austrade"] },
+  "jobs-skills-australia": { name: "澳洲就业与技能局", displayTag: "JSA", aliases: ["Jobs and Skills Australia", "Jobs & Skills Australia", "JSA"], orgNames: ["Jobs and Skills Australia", "Jobs & Skills Australia", "澳洲就业与技能局"] },
+  abs: { name: "澳洲统计局", displayTag: "ABS", aliases: ["Australian Bureau of Statistics", "ABS", "澳洲统计局"], orgNames: ["Australian Bureau of Statistics", "澳洲统计局"] },
+  dewr: { name: "澳洲就业与劳资关系部", displayTag: "DEWR", aliases: ["Department of Employment and Workplace Relations", "DEWR"], orgNames: ["Department of Employment and Workplace Relations", "澳洲就业与劳资关系部"] },
+  "fair-work": { name: "公平工作监察署", displayTag: "Fair Work", aliases: ["Fair Work Ombudsman", "FWO", "公平工作监察署"], orgNames: ["Fair Work Ombudsman", "公平工作监察署"] },
+  "federal-legislation": { name: "联邦法规登记册", displayTag: "联邦法规", aliases: ["Federal Register of Legislation", "联邦法规登记册"], orgNames: ["Federal Register of Legislation", "联邦法规登记册"] },
+  tra: { name: "Trades Recognition Australia", displayTag: null, aliases: ["Trades Recognition Australia"] },
+  vetassess: { name: "VETASSESS", displayTag: null, aliases: ["VETASSESS"] },
+  "national-training-register": { name: "澳洲国家培训登记册", displayTag: null, aliases: ["National Training Register"] },
 };
 // 只校验明确机构名，避免用州名、签证号码或 GS/SA 等歧义简称拒绝正常翻译。
 export const IDENTITY_LEXICON: ReadonlyArray<{ id: string; name: string; patterns: RegExp[] }> = [
@@ -60,5 +68,8 @@ export const PUBLISHER_DOMAINS: ReadonlyArray<{ entityId: string; domains: reado
   { entityId: "teqsa", domains: ["teqsa.gov.au"] },
   { entityId: "asqa", domains: ["asqa.gov.au"] },
   { entityId: "study-australia", domains: ["studyaustralia.gov.au"] },
+  { entityId: "tra", domains: ["tradesrecognitionaustralia.gov.au"] },
+  { entityId: "vetassess", domains: ["vetassess.com.au"] },
+  { entityId: "national-training-register", domains: ["training.gov.au"] },
 ];
 export const IDENTITY_CONTEXT_ALIASES: ReadonlyArray<{ entityId: string; pattern: RegExp }> = [];

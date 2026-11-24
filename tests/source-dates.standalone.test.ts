@@ -6,8 +6,15 @@ import { test } from "node:test";
 import { describeReport } from "@aihot/backend/events/relate";
 import { readable } from "@aihot/backend/content/extract";
 import { parseLooseDate, readPublicationDate, readRelativeDate, describePublicationTime } from "@aihot/backend/sources/dates";
+import { toDate } from "@aihot/backend/sources/json-list";
 
 const iso = (v: string, offset?: string) => parseLooseDate(v, offset)?.toISOString() ?? null;
+
+test("an ISO registration field can retain only the publisher's calendar day", () => {
+  assert.deepEqual(toDate("2026-11-13T15:04:07.0740395", "iso_day", undefined),
+    readPublicationDate("2026-11-13"));
+  assert.equal(toDate("2026-02-30T15:04:07", "iso_day", undefined).publishedAt, null);
+});
 
 // Public news lists also print English ordinals with the day first.
 test("day-first ordinal dates keep the source's calendar day and reject impossible dates", () => {
@@ -38,6 +45,23 @@ test("a date that carries its zone keeps it", () => {
   assert.equal(iso("2026-09-26T10:00:00.000+09:00"), "2026-09-26T01:00:00.000Z");
   assert.equal(iso("Sat, 26 Sep 2026 10:00:00 GMT"), "2026-09-26T10:00:00.000Z");
   assert.equal(iso("Sat, 26 Sep 2026 10:00:00 +0200", "-07:00"), "2026-09-26T08:00:00.000Z");
+});
+
+test("a clock printed before the weekday retains its time and source offset", () => {
+  const zone = process.env.TZ;
+  try {
+    for (const tz of ["UTC", "Asia/Shanghai", "America/New_York"]) {
+      process.env.TZ = tz;
+      assert.deepEqual(readPublicationDate("4:28 pm, Friday, 30 October 2026", "+10:00"), {
+        publishedAt: new Date("2026-10-30T06:28:00Z"), publicationTime: "2026-10-30T06:28:00.000Z",
+      });
+      assert.equal(iso("12:05 am, Friday, 30 October 2026", "+10:00"), "2026-10-29T14:05:00.000Z");
+      assert.equal(iso("4:28 pm, Monday, 30 February 2026", "+10:00"), null);
+    }
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
 });
 
 test("no date at all is null", () => {

@@ -12,7 +12,7 @@ import { SITE, subjectAfter, withSubject } from "@aihot/site";
  */
 export function siteUrl(): string {
   if (typeof window !== "undefined") return window.location.origin;
-  return (process.env.SITE_URL || SITE.defaultUrl).replace(/\/+$/, "");
+  return (process.env.SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : SITE.defaultUrl)).replace(/\/+$/, "");
 }
 
 const HOME_TITLE = SITE.homeTitle;

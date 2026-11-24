@@ -208,8 +208,8 @@ export async function registerContentJobs(boss: PgBoss) {
  * Body extraction before analysis. Failures are retried a few times; after that the article is judged
  * on the excerpt it has ("unconfirmed" body, never a wrong one).
  */
-export async function registerExtractionJobs(boss: PgBoss) {
-  await work(boss, QUEUES.extractBody, { localConcurrency: 4, pollingIntervalSeconds: 2 }, async ({ articleId }) => {
+export async function registerExtractionJobs(boss: PgBoss, concurrency = 4) {
+  await work(boss, QUEUES.extractBody, { localConcurrency: concurrency, pollingIntervalSeconds: 2 }, async ({ articleId }) => {
     const [input] = await sql<{ revision: number }[]>`SELECT revision FROM articles WHERE id = ${articleId}`;
     if (!input) return { state: "missing" };
     try {

@@ -8,13 +8,18 @@ import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { config } from "@aihot/backend/config";
 import { fetchListing } from "@aihot/backend/sources/listing-fetch";
 import { fetchRss } from "@aihot/backend/sources/rss";
-import { fetchWebList } from "@aihot/backend/sources/web-list";
+import { fetchDetail, fetchWebList } from "@aihot/backend/sources/web-list";
 import { fetchJsonList } from "@aihot/backend/sources/json-list";
+import { jinaRead } from "@aihot/backend/providers/jina";
+import { ProviderRejectedError } from "@aihot/backend/providers/receipts";
+import { extractFromUrl } from "@aihot/backend/content/extract";
+import { assertSupportedConfig } from "@aihot/backend/sources/config-keys";
 import type { SourceRow } from "@aihot/backend/sources/types";
 
 const previousDispatcher = getGlobalDispatcher();
 const previousPrivate = config.allowPrivateNetworkFetch;
 const previousProxy = config.egressProxyUrl;
+const previousJinaKey = process.env.JINA_API_KEY;
 const mockAgent = new MockAgent();
 mockAgent.disableNetConnect();
 setGlobalDispatcher(mockAgent);
@@ -28,6 +33,8 @@ after(async () => {
   syncBuiltinESMExports();
   config.allowPrivateNetworkFetch = previousPrivate;
   config.egressProxyUrl = previousProxy;
+  if (previousJinaKey === undefined) delete process.env.JINA_API_KEY;
+  else process.env.JINA_API_KEY = previousJinaKey;
   setGlobalDispatcher(previousDispatcher);
   await mockAgent.close();
 });
@@ -40,6 +47,21 @@ const source = (kind: string, config: Record<string, unknown>, cursor: SourceRow
   ({ id: "listing-retry", kind, config, cursor, participation_mode: "editorial" }) as SourceRow;
 const dropped = (message = "Client network socket disconnected before secure TLS connection was established") =>
   Object.assign(new Error(message), { code: "ECONNRESET" });
+
+test("RSS and HTML listings send declared request headers and retain RSS validators", async () => {
+  const headers = { accept: "*/*", "user-agent": "publisher-feed-reader" };
+  const rss = source("rss", { feedUrl: origin + "/negotiated.xml", headers });
+  const html = source("web_list", { url: origin + "/negotiated", headers, parseMode: "html", itemSelector: "a:has(h3)", titleSelector: "h3" });
+  for (const s of [rss, html]) assertSupportedConfig(s.kind, s.config);
+  mockAgent.get(origin).intercept({ path: "/negotiated.xml", headers }).reply(200, xml, { headers: { etag: '"negotiated"' } });
+  const first = await fetchRss(rss);
+  assert.equal(first.candidates.length, 1);
+  rss.cursor = { rss: first.validator };
+  mockAgent.get(origin).intercept({ path: "/negotiated.xml", headers: { ...headers, "if-none-match": '"negotiated"' } }).reply(304, "");
+  assert.equal((await fetchRss(rss)).notModified, true);
+  mockAgent.get(origin).intercept({ path: "/negotiated", headers }).reply(200, '<a href="/post"><h3>Publisher update</h3></a>');
+  assert.equal((await fetchWebList(html))[0]?.title, "Publisher update");
+});
 
 test("RSS, HTML and JSON listings recover from a dropped connection, a second drop fails", async () => {
   for (const [kind, path, body] of [
@@ -90,4 +112,59 @@ test("upstream 500 is retried once, but ordinary missing URLs and access/rate re
     assert.equal((await fetchListing(host + path)).status, status);
     assert.equal(hits, 1, host + path);
   }
+});
+
+test("anonymous Reader is explicit, sends no key, and never opens a paid receipt", async () => {
+  delete process.env.JINA_API_KEY;
+  await assert.rejects(jinaRead(origin + "/reader", { purpose: "test", subject: "listing" }), /JINA_API_KEY is not configured/);
+  // Even a configured key must not turn an explicitly free source into an authenticated request.
+  process.env.JINA_API_KEY = "key-that-must-not-be-sent";
+  mockAgent.get("https://r.jina.ai").intercept({ path: "/" + origin + "/reader" }).reply((opts) => {
+    assert.doesNotMatch(JSON.stringify(opts.headers), /authorization|key-that-must-not-be-sent/i);
+    return { statusCode: 200, data: "Title: Public news\n\nMarkdown Content:\nVerified public material\0and text." };
+  });
+  const page = await jinaRead(origin + "/reader", { purpose: "test", subject: "listing", anonymous: true });
+  assert.equal(page.receiptId, null);
+  assert.equal(page.markdown, "Verified public material�and text.");
+  // Standalone setup points DATABASE_URL at an unreachable address: a paid receipt would fail this read.
+});
+
+test("anonymous Reader refuses private targets and reports upstream 429 or challenge pages", async () => {
+  for (const url of ["http://127.0.0.1/page", "http://[::1]/page", "http://metadata.google.internal/page", "file:///private", "https://user:secret@example.org/page"]) {
+    await assert.rejects(jinaRead(url, { purpose: "test", subject: "listing", anonymous: true }), /public HTTP\(S\) URL/);
+  }
+  mockAgent.get("https://r.jina.ai").intercept({ path: "/" + origin + "/reader-rate" }).reply(429, "Rate limit exceeded");
+  await assert.rejects(jinaRead(origin + "/reader-rate", { purpose: "test", subject: "listing", anonymous: true }),
+    (error: Error) => error instanceof ProviderRejectedError && error.status === 429 && error.retryable);
+  mockAgent.get("https://r.jina.ai").intercept({ path: "/" + origin + "/reader-challenge" }).reply(200,
+    "Title: Verification\nWarning: Target URL returned error 403: Forbidden\n\nMarkdown Content:\nYou must pass a browser check.");
+  await assert.rejects(jinaRead(origin + "/reader-challenge", { purpose: "test", subject: "listing", anonymous: true }), /403/);
+});
+
+test("anonymous source details read CSS publication metadata from Reader HTML", async () => {
+  const s = source("web_list", { url: "https://r.jina.ai/" + origin + "/news", jinaMode: "anonymous", parseMode: "html",
+    detail: { publishedAtSelector: 'meta[property="article:published_time"]', titleSelector: "h1", summarySelector: 'meta[name="description"]' } });
+  assertSupportedConfig(s.kind, s.config);
+  mockAgent.get("https://r.jina.ai").intercept({ path: "/" + origin + "/news/detail" }).reply((opts) => {
+    assert.doesNotMatch(JSON.stringify(opts.headers), /authorization/i);
+    assert.match(JSON.stringify(opts.headers), /x-return-format.*html/i);
+    return { statusCode: 200, data: '<html><head><meta property="article:published_time" content="2026-11-17T14:30:00+11:00"><meta name="description" content="Official description"></head><body><main><h1>Official update</h1></main></body></html>' };
+  });
+  const detail = await fetchDetail(origin + "/news/detail", s, { date: true, title: true, summary: true, body: false });
+  assert.equal(detail.title, "Official update");
+  assert.equal(detail.summary, "Official description");
+  assert.equal(detail.publishedAt?.toISOString(), "2026-11-17T03:30:00.000Z");
+  assert.equal(detail.publicationTime, "2026-11-17T03:30:00.000Z");
+});
+
+test("a source can explicitly use anonymous Reader for article body fallback", async () => {
+  mockAgent.get(origin).intercept({ path: "/body-refused" }).reply(403, "Forbidden");
+  const text = "The official source describes the published policy and the affected applications. ".repeat(8).trim();
+  mockAgent.get("https://r.jina.ai").intercept({ path: "/" + origin + "/body-refused" }).reply((opts) => {
+    assert.doesNotMatch(JSON.stringify(opts.headers), /authorization/i);
+    return { statusCode: 200, data: `Title: Official report\n\nMarkdown Content:\n${text}` };
+  });
+  const body = await extractFromUrl(origin + "/body-refused", "article:test", {}, { jinaMode: "anonymous" });
+  assert.equal(body?.via, "jina");
+  assert.equal(body?.text, text);
 });

@@ -1,0 +1,7 @@
+{
+  "name": "@aihot/official-watch",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./module.ts", "./server": "./server.ts", "./watch": "./watch.ts", "./web": "./web.tsx" },
+  "dependencies": { "@aihot/backend": "*", "@aihot/contracts": "*" }
+}

@@ -1,5 +1,5 @@
 {
-  "$comment": "澳洲政策雷达启动信源。默认启用5个已验证解析的官方来源；其余为明确暂停的候选配置，须在后台试抓并补全日期、选择器后启用。启动仅补充新ID，不删除或覆盖已有信源。详见 docs/australia.md。内政部接口按自然年查询，跨年前需在后台更新 Year。",
+  "$comment": "澳洲政策雷达官方入口。新闻列表与法规 API 按原站日期入库，原址更新以正文监测记录变化。采用可读的官方北领地主管部门新闻及 DAMA 页面。详细覆盖和实测状态见 docs/official-sources.md。种子只新增信源，现有部署需同步已存在 ID。",
   "sources": [
     {
       "id": "au-home-affairs-news",
@@ -14,7 +14,9 @@
         "mode": "json_api",
         "method": "POST",
         "headers": {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "user-agent": "node",
+          "accept": "*/*"
         },
         "bodyJson": {
           "siteUrl": "https://www.homeaffairs.gov.au",
@@ -170,19 +172,25 @@
     },
     {
       "id": "au-vic-news",
-      "name": "维州：州担保新闻（访问验证待处理）",
+      "name": "维州：州担保新闻",
       "kind": "web_list",
       "config": {
+        "url": "https://r.jina.ai/https://liveinmelbourne.vic.gov.au/news-events/news",
+        "baseUrl": "https://liveinmelbourne.vic.gov.au/news-events/news",
         "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
-        "_aihot": {
-          "initialBackfillLimit": 5
-        },
-        "url": "https://liveinmelbourne.vic.gov.au/news-events/news",
-        "itemSelector": "main a[href*=\"/news-events/news/\"]",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "itemSelector": ".summary-grid__item--news",
+        "linkSelector": "a",
+        "titleSelector": ".summary-grid__item__body",
+        "publishedAtSelector": ".category",
+        "publishedAtUtcOffset": "+11:00",
         "allowUrlPrefixes": [
           "https://liveinmelbourne.vic.gov.au/news-events/news/"
-        ]
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 5
+        }
       },
       "tier": "T1",
       "owner_entity_id": "migration-vic",
@@ -193,22 +201,32 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-tas-news",
-      "name": "塔州：移民新闻（访问验证待处理）",
+      "name": "塔州：移民新闻",
       "kind": "web_list",
       "config": {
+        "url": "https://r.jina.ai/https://www.migration.tas.gov.au/news",
+        "baseUrl": "https://www.migration.tas.gov.au/news",
         "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "itemSelector": ".article-item__details",
+        "linkSelector": "a.btn-link",
+        "titleSelector": "h2",
+        "publishedAtUtcOffset": "+11:00",
+        "allowUrlPrefixes": [
+          "https://www.migration.tas.gov.au/news/"
+        ],
         "_aihot": {
           "initialBackfillLimit": 5
         },
-        "url": "https://www.migration.tas.gov.au/news",
-        "itemSelector": "main a[href*=\"/news/\"]",
-        "allowUrlPrefixes": [
-          "https://www.migration.tas.gov.au/news/"
+        "publishedAtSelector": "p",
+        "denyUrlPrefixes": [
+          "https://www.migration.tas.gov.au/news/important-update-roi-system-currently-offline",
+          "https://www.migration.tas.gov.au/news/processing_times_and_allocation_usage"
         ]
       },
       "tier": "T1",
@@ -220,11 +238,11 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-qld-news",
-      "name": "昆州：移民新闻（发布日期待核验）",
+      "name": "昆州：移民与州担保新闻",
       "kind": "web_list",
       "config": {
         "parseMode": "html",
@@ -233,12 +251,23 @@
           "initialBackfillLimit": 5
         },
         "url": "https://migration.qld.gov.au/news",
-        "itemSelector": ".stories-list a.story-wrapper",
+        "baseUrl": "https://migration.qld.gov.au/news",
+        "itemSelector": ".stories-list a.story-wrapper, main#main-content li > a[href^='/news/']",
         "linkSelector": "a",
-        "titleSelector": "h5",
+        "titleSelector": "h5, h2",
         "allowUrlPrefixes": [
           "https://migration.qld.gov.au/news/"
-        ]
+        ],
+        "detail": {
+          "maxFetches": 5,
+          "publishedAtRegex": "Last published:[\\s\\S]{0,30}?(\\d{1,2}:\\d{2} [aApP][mM], [A-Za-z]+, \\d{1,2} [A-Za-z]+ 20\\d{2})",
+          "publishedAtUtcOffset": "+10:00",
+          "titleSelector": "main h1",
+          "summarySelector": "meta[name=\"description\"]",
+          "publishedAtAuthoritative": true,
+          "upgradeDatePrecision": true
+        },
+        "publishedAtUtcOffset": "+10:00"
       },
       "tier": "T1",
       "owner_entity_id": "migration-qld",
@@ -249,21 +278,13 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-act-news",
-      "name": "首都领地：移民新闻（访问验证待处理）",
-      "kind": "web_list",
-      "config": {
-        "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
-        "_aihot": {
-          "initialBackfillLimit": 5
-        },
-        "url": "https://www.act.gov.au/migration/resources/latest-news",
-        "itemSelector": "main a[href*=\"/migration/\"]"
-      },
+      "name": "首都领地：移民官网页面监测",
+      "kind": "external",
+      "config": {},
       "tier": "T1",
       "owner_entity_id": "migration-act",
       "participation_mode": "editorial",
@@ -273,23 +294,27 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-education-news",
-      "name": "澳洲教育部：国际教育公告（连接与解析待核验）",
+      "name": "澳洲教育部：国际教育公告",
       "kind": "web_list",
       "config": {
+        "url": "https://r.jina.ai/https://www.education.gov.au/announcements/international-education",
+        "baseUrl": "https://www.education.gov.au/announcements/international-education",
         "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
+        "itemSelector": ".views-row.list-item-wrapper",
+        "linkSelector": ".title a",
+        "titleSelector": ".title a",
+        "publishedAtSelector": ".date time[datetime]",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
         "_aihot": {
           "initialBackfillLimit": 5
         },
-        "url": "https://www.education.gov.au/announcements/international-education",
-        "itemSelector": "main article",
-        "linkSelector": "h2 a,h3 a",
-        "titleSelector": "h2 a,h3 a",
-        "publishedAtSelector": "time"
+        "fetchPublicContent": true
       },
       "tier": "T1",
       "owner_entity_id": "education-au",
@@ -300,23 +325,30 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-teqsa-news",
-      "name": "TEQSA：监管新闻（连接与解析待核验）",
+      "name": "TEQSA：监管新闻",
       "kind": "web_list",
       "config": {
+        "url": "https://r.jina.ai/https://www.teqsa.gov.au/about-us/news-and-events/latest-news",
+        "baseUrl": "https://www.teqsa.gov.au/about-us/news-and-events/latest-news",
         "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
+        "itemSelector": "a.search_result_card",
+        "linkSelector": "a",
+        "titleSelector": "h3",
+        "publishedAtUtcOffset": "+11:00",
+        "detail": {
+          "maxFetches": 5,
+          "publishedAtSelector": "article time[datetime]"
+        },
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
         "_aihot": {
           "initialBackfillLimit": 5
         },
-        "url": "https://www.teqsa.gov.au/about-us/news-and-events/latest-news",
-        "itemSelector": "main article",
-        "linkSelector": "h2 a,h3 a",
-        "titleSelector": "h2 a,h3 a",
-        "publishedAtSelector": "time"
+        "fetchPublicContent": true
       },
       "tier": "T1",
       "owner_entity_id": "teqsa",
@@ -327,23 +359,27 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "au-asqa-news",
-      "name": "ASQA：新闻与提醒（连接与解析待核验）",
+      "name": "ASQA：新闻与提醒",
       "kind": "web_list",
       "config": {
+        "url": "https://r.jina.ai/https://www.asqa.gov.au/newsroom/latest-news",
+        "baseUrl": "https://www.asqa.gov.au/newsroom/latest-news",
         "parseMode": "html",
-        "acceptLanguage": "en-AU,en;q=0.9",
+        "itemSelector": "a.card:has(h2.card-title)",
+        "linkSelector": "a",
+        "titleSelector": "h2.card-title",
+        "publishedAtSelector": ".card-body > div.mt-2",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
         "_aihot": {
           "initialBackfillLimit": 5
         },
-        "url": "https://www.asqa.gov.au/newsroom/latest-news",
-        "itemSelector": "main article",
-        "linkSelector": "h2 a,h3 a",
-        "titleSelector": "h2 a,h3 a",
-        "publishedAtSelector": "time"
+        "fetchPublicContent": true
       },
       "tier": "T1",
       "owner_entity_id": "asqa",
@@ -354,7 +390,755 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "id": "au-home-affairs-minister",
+      "name": "内政与移民部长：Tony Burke 官方发布",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://minister.homeaffairs.gov.au/_layouts/15/AppPages/Rss.aspx?type=media&mini=TonyBurke",
+        "headers": {
+          "user-agent": "node"
+        },
+        "_aihot": {
+          "initialBackfillLimit": 8
+        },
+        "allowUrlPrefixes": [
+          "https://minister.homeaffairs.gov.au/TonyBurke/Pages/"
+        ],
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "flood resilience",
+            "disaster assistance",
+            "disaster recovery",
+            "cyber security",
+            "cybersecurity",
+            "ransomware",
+            "counter-terrorism",
+            "illicit tobacco",
+            "tobacco crackdown",
+            "evacuation centre",
+            "flood",
+            "bushfire",
+            "disaster",
+            "smart glasses"
+          ],
+          "keepIfMatches": [
+            "visa",
+            "migration",
+            "immigration",
+            "international student",
+            "education agent",
+            "citizenship",
+            "ESOS"
+          ]
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "home-affairs",
+      "enabled": true
+    },
+    {
+      "id": "au-immigration-assistant-minister",
+      "name": "移民助理部长：Matt Thistlethwaite 官方发布",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://minister.homeaffairs.gov.au/_layouts/15/AppPages/Rss.aspx?type=media&mini=MattThistlethwaite",
+        "headers": {
+          "user-agent": "node"
+        },
+        "_aihot": {
+          "initialBackfillLimit": 8
+        },
+        "allowUrlPrefixes": [
+          "https://minister.homeaffairs.gov.au/MattThistlethwaite/Pages/"
+        ],
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "flood resilience",
+            "disaster assistance",
+            "disaster recovery",
+            "cyber security",
+            "cybersecurity",
+            "ransomware",
+            "counter-terrorism",
+            "illicit tobacco",
+            "tobacco crackdown",
+            "evacuation centre",
+            "flood",
+            "bushfire",
+            "disaster",
+            "smart glasses"
+          ],
+          "keepIfMatches": [
+            "visa",
+            "migration",
+            "immigration",
+            "international student",
+            "education agent",
+            "citizenship",
+            "ESOS"
+          ]
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "home-affairs",
+      "enabled": true
+    },
+    {
+      "id": "au-international-education-minister",
+      "name": "国际教育助理部长：Julian Hill 官方发布",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://minister.homeaffairs.gov.au/_layouts/15/AppPages/Rss.aspx?type=media&mini=JulianHill",
+        "headers": {
+          "user-agent": "node"
+        },
+        "_aihot": {
+          "initialBackfillLimit": 8
+        },
+        "allowUrlPrefixes": [
+          "https://minister.homeaffairs.gov.au/JulianHill/Pages/"
+        ],
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "flood resilience",
+            "disaster assistance",
+            "disaster recovery",
+            "cyber security",
+            "cybersecurity",
+            "ransomware",
+            "counter-terrorism",
+            "illicit tobacco",
+            "tobacco crackdown",
+            "evacuation centre",
+            "flood",
+            "bushfire",
+            "disaster",
+            "smart glasses"
+          ],
+          "keepIfMatches": [
+            "visa",
+            "migration",
+            "immigration",
+            "international student",
+            "education agent",
+            "citizenship",
+            "ESOS"
+          ]
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "home-affairs",
+      "enabled": true
+    },
+    {
+      "id": "au-home-affairs-portfolio",
+      "name": "内政部：综合公告与移民代理监管",
+      "kind": "json_list",
+      "config": {
+        "acceptLanguage": "en-AU,en;q=0.9",
+        "_aihot": {
+          "initialBackfillLimit": 8
+        },
+        "url": "https://www.homeaffairs.gov.au/_layouts/15/api/Data.aspx/GetNews",
+        "mode": "json_api",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "user-agent": "node",
+          "accept": "*/*"
+        },
+        "bodyJson": {
+          "siteUrl": "https://www.homeaffairs.gov.au",
+          "webUrl": "/News-subsite",
+          "filter": {
+            "Month": null,
+            "Year": "2026",
+            "Categories": [],
+            "PageNumber": 1,
+            "RowLimit": 100,
+            "ShowCurrentSiteOnly": true,
+            "CurrentSite": "Portfolio"
+          }
+        },
+        "itemsPath": "d.data",
+        "titlePaths": [
+          "Title"
+        ],
+        "summaryPaths": [
+          "Content"
+        ],
+        "summaryIsBody": true,
+        "publishedAtPath": "Date",
+        "externalIdPath": "Id",
+        "urlTemplate": "https://www.homeaffairs.gov.au/news-media/archive/article?itemId={Id}",
+        "ingestNoiseFilter": {
+          "dropMarkersTitleOnly": [
+            "cyber security",
+            "cybersecurity",
+            "ransomware",
+            "terrorist organisation",
+            "illicit tobacco",
+            "tobacco crackdown",
+            "evacuation centre",
+            "flood",
+            "bushfire",
+            "disaster",
+            "smart glasses"
+          ],
+          "keepIfMatches": [
+            "visa",
+            "migration",
+            "immigration",
+            "migration agent",
+            "citizenship",
+            "student"
+          ]
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "home-affairs",
+      "enabled": true
+    },
+    {
+      "id": "au-abs-migration",
+      "name": "澳洲统计局：移民与人口统计",
+      "kind": "web_list",
+      "config": {
+        "parseMode": "html",
+        "acceptLanguage": "en-AU,en;q=0.9",
+        "_aihot": {
+          "initialBackfillLimit": 5
+        },
+        "url": "https://www.abs.gov.au/statistics/people/population",
+        "itemSelector": ".abs-topic.node",
+        "linkSelector": "a.field-group-link",
+        "titleSelector": "h2",
+        "publishedAtSelector": "time[datetime]",
+        "allowUrlPrefixes": [
+          "https://www.abs.gov.au/statistics/people/population/overseas-migration/",
+          "https://www.abs.gov.au/statistics/people/population/national-state-and-territory-population/",
+          "https://www.abs.gov.au/statistics/people/population/australias-population-country-birth/",
+          "https://www.abs.gov.au/statistics/people/population/regional-population/"
+        ],
+        "publishedAtUtcOffset": "+11:00"
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "abs",
+      "enabled": true
+    },
+    {
+      "id": "au-dewr-ministers",
+      "name": "就业与劳资关系部：部长媒体发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://r.jina.ai/https://ministers.dewr.gov.au/",
+        "baseUrl": "https://ministers.dewr.gov.au/",
+        "parseMode": "html",
+        "itemSelector": ".release",
+        "linkSelector": ".read-more a",
+        "titleSelector": "h3.title",
+        "publishedAtSelector": ".date",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "_aihot": {
+          "initialBackfillLimit": 5
+        },
+        "fetchPublicContent": true
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "dewr",
+      "enabled": true
+    },
+    {
+      "id": "au-nt-migration",
+      "name": "北领地主管部门：移民与劳动力新闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://r.jina.ai/https://dtbar.nt.gov.au/news",
+        "baseUrl": "https://dtbar.nt.gov.au/news",
+        "parseMode": "html",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "itemSelector": ".media-body:has(.news-headline)",
+        "linkSelector": ".news-headline a",
+        "titleSelector": ".news-headline a",
+        "publishedAtSelector": ".news-meta",
+        "publishedAtUtcOffset": "+09:30",
+        "allowUrlPrefixes": [
+          "https://dtbar.nt.gov.au/news/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 5
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "migration-nt",
+      "enabled": true
+    },
+    {
+      "id": "au-jsa-news",
+      "name": "Jobs and Skills Australia：技能与移民研究",
+      "kind": "web_list",
+      "config": {
+        "url": "https://r.jina.ai/https://www.jobsandskills.gov.au/news",
+        "baseUrl": "https://www.jobsandskills.gov.au/news",
+        "parseMode": "html",
+        "itemSelector": "a.card-manual",
+        "linkSelector": "a",
+        "titleSelector": "h3",
+        "publishedAtSelector": ".date time[datetime]",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "_aihot": {
+          "initialBackfillLimit": 5
+        },
+        "fetchPublicContent": true
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "jobs-skills-australia",
+      "enabled": true
+    },
+    {
+      "id": "au-fair-work-news",
+      "name": "Fair Work：劳动权益新闻",
+      "kind": "web_list",
+      "config": {
+        "url": "https://r.jina.ai/https://www.fairwork.gov.au/newsroom",
+        "baseUrl": "https://www.fairwork.gov.au/newsroom",
+        "parseMode": "html",
+        "itemSelector": ".views-row:has(h2 a)",
+        "linkSelector": "h2 a",
+        "titleSelector": "h2 a",
+        "publishedAtSelector": ".date-line",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "_aihot": {
+          "initialBackfillLimit": 5
+        },
+        "fetchPublicContent": true
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "fair-work",
+      "enabled": true
+    },
+    {
+      "id": "au-omara-notices",
+      "name": "OMARA：官方通知页面监测",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "omara",
+      "enabled": true
+    },
+    {
+      "id": "au-education-ministers",
+      "name": "教育部：部长媒体发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://r.jina.ai/https://ministers.education.gov.au/",
+        "baseUrl": "https://ministers.education.gov.au/",
+        "parseMode": "html",
+        "itemSelector": ".release",
+        "linkSelector": ".read-more a",
+        "titleSelector": "h3.title",
+        "publishedAtSelector": ".date",
+        "publishedAtUtcOffset": "+11:00",
+        "jinaMode": "anonymous",
+        "cacheToleranceSeconds": 900,
+        "_aihot": {
+          "initialBackfillLimit": 5
+        },
+        "fetchPublicContent": true
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "education-au",
+      "enabled": true
+    },
+    {
+      "id": "au-federal-legislation",
+      "name": "联邦法规登记册：移民法规官方API",
+      "kind": "json_list",
+      "config": {
+        "url": "https://api.prod.legislation.gov.au/v1/titles?$top=20&$filter=contains(name,%27Migration%27)&$orderby=asMadeRegisteredAt%20desc",
+        "mode": "json_api",
+        "itemsPath": "value",
+        "titlePaths": [
+          "name"
+        ],
+        "publishedAtPath": "asMadeRegisteredAt",
+        "externalIdPath": "id",
+        "urlTemplate": "https://www.legislation.gov.au/{id}/asmade/text",
+        "_aihot": {
+          "initialBackfillLimit": 10
+        },
+        "publishedAtUnit": "iso_day"
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "owner_entity_id": "federal-legislation",
+      "enabled": true
+    },
+    {
+      "id": "au-nt-dama",
+      "name": "北领地DAMA：官方政策页面监测",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "owner_entity_id": "migration-nt",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-tas-roi",
+      "name": "塔州：ROI 状态监测",
+      "owner_entity_id": "migration-tas",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-tas-rounds",
+      "name": "塔州：邀请轮次与配额监测",
+      "owner_entity_id": "migration-tas",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-nsw-skilled",
+      "name": "新州：当前技术签证项目监测",
+      "owner_entity_id": "migration-nsw",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-act-invitation-rankings",
+      "name": "首都领地：Canberra Matrix 邀请排名",
+      "owner_entity_id": "migration-act",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-visa-fees",
+      "name": "澳洲内政部：签证费用表",
+      "owner_entity_id": "home-affairs",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-student-visa-priorities",
+      "name": "澳洲内政部：学生签证审理优先级",
+      "owner_entity_id": "home-affairs",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-education-provider-priorities",
+      "name": "澳洲教育部：院校签证优先级快照",
+      "owner_entity_id": "education-au",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-employer-salary-thresholds",
+      "name": "澳洲内政部：雇主担保薪资门槛",
+      "owner_entity_id": "home-affairs",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-vic-points-test",
+      "name": "维州：Victorian Points Test 排名规则",
+      "owner_entity_id": "migration-vic",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-skilled-visa-priorities",
+      "name": "澳洲内政部：技术签证审理优先级",
+      "owner_entity_id": "home-affairs",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-nsw-skills-lists",
+      "name": "新州：190／491 技术移民职业清单",
+      "owner_entity_id": "migration-nsw",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-tra-jrp-fees",
+      "name": "Trades Recognition Australia：Job Ready 项目费用",
+      "owner_entity_id": "tra",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-vetassess-news",
+      "name": "VETASSESS：官方新闻与项目更新",
+      "owner_entity_id": "vetassess",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.vetassess.com.au/news",
+        "parseMode": "html",
+        "itemSelector": ".news-item--card:has(a[href=\"/news/category/news\"], a[href=\"/news/category/updates\"])",
+        "linkSelector": ".card-title a",
+        "allowUrlPrefixes": [
+          "https://www.vetassess.com.au/news/"
+        ],
+        "fetchPublicContent": true,
+        "detail": {
+          "publishedAtSelector": "main .views-field-created time",
+          "publishedAtAuthoritative": true,
+          "maxFetches": 9
+        },
+        "_aihot": {
+          "initialBackfillLimit": 5
+        }
+      },
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-cricos-register",
+      "name": "澳洲教育部：CRICOS 注册记录",
+      "owner_entity_id": "education-au",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "au-national-training-register",
+      "name": "澳洲国家培训登记册：RTO 注册记录",
+      "owner_entity_id": "national-training-register",
+      "kind": "external",
+      "config": {},
+      "tier": "T1",
+      "participation_mode": "editorial",
+      "interval_minutes": 240,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
     }
   ]
 }

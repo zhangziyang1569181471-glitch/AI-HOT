@@ -80,10 +80,10 @@ async function fetchListingText(source: SourceRow): Promise<{ text: string; viaJ
     // A listing parsed with selectors asks Jina for the rendered HTML (a site our resolver cannot reach
     // still gets its dates and titles from the markup); otherwise Jina's Markdown.
     const format = source.config.parseMode === "html" ? "html" : undefined;
-    const page = await jinaRead(target, { purpose: "source_listing", subject: `source:${source.id}`, cacheToleranceSeconds: source.config.cacheToleranceSeconds, format, perRead: true });
+    const page = await jinaRead(target, { purpose: "source_listing", subject: `source:${source.id}`, cacheToleranceSeconds: source.config.cacheToleranceSeconds, format, perRead: true, anonymous: source.config.jinaMode === "anonymous" });
     return { text: page.markdown, viaJina: true, base: source.config.baseUrl ?? target };
   }
-  const res = requireOk(await fetchListing(url, { headers: { accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8", ...languageHeaders(source.config.acceptLanguage) }, timeoutMs: 25_000 }));
+  const res = requireOk(await fetchListing(url, { headers: { accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8", ...languageHeaders(source.config.acceptLanguage), ...(source.config.headers ?? {}) }, timeoutMs: 25_000 }));
   const text = res.text();
   contentDocument(text);
   return { text, viaJina: false, base: source.config.baseUrl ?? res.url };
@@ -389,17 +389,22 @@ export async function fetchDetail(url: string, source: SourceRow, need: DetailNe
   const jinaListing = String(source.config.url ?? "").startsWith(JINA_PREFIX);
   const dateInJina = need.date && jinaListing && !!d.publishedAtRegex;
   const titleInJina = need.title && jinaListing && !!d.titleRegex;
-  const jina = dateInJina || titleInJina ? (await jinaRead(url, { purpose: "source_detail", subject: `source:${source.id}` })).raw : null;
+  const jina = dateInJina || titleInJina ? (await jinaRead(url, { purpose: "source_detail", subject: `source:${source.id}`, cacheToleranceSeconds: source.config.cacheToleranceSeconds, anonymous: source.config.jinaMode === "anonymous" })).raw : null;
   let html: string | null = null;
   let page: { document: ReturnType<typeof contentDocument>; url: string; whole: boolean } | null = null;
   if ((need.date && !dateInJina) || (need.title && !titleInJina) || need.summary) {
     // The rules read a page's head and byline. A page past the size limit (a long paper with inline
     // figures) is read up to it rather than failing on every run; a body cut there is not kept.
-    const res = requireOk(await guardedFetch(url, { headers: languageHeaders(source.config.acceptLanguage), timeoutMs: 20_000, truncate: true }), "detail");
-    // A sign-in form is no detail page: its title, date and text are not the post's.
-    if (isSignInRedirect(url, res.url)) throw new UnavailablePageError("redirected to a sign-in form");
-    html = res.text();
-    page = { document: contentDocument(html), url: res.url, whole: !res.truncated && /html/.test(res.headers.get("content-type") ?? "") };
+    if (jinaListing && source.config.jinaMode === "anonymous") {
+      html = (await jinaRead(url, { purpose: "source_detail", subject: `source:${source.id}`, format: "html", cacheToleranceSeconds: source.config.cacheToleranceSeconds, anonymous: true })).markdown;
+      page = { document: contentDocument(html), url, whole: true };
+    } else {
+      const res = requireOk(await guardedFetch(url, { headers: languageHeaders(source.config.acceptLanguage), timeoutMs: 20_000, truncate: true }), "detail");
+      // A sign-in form is no detail page: its title, date and text are not the post's.
+      if (isSignInRedirect(url, res.url)) throw new UnavailablePageError("redirected to a sign-in form");
+      html = res.text();
+      page = { document: contentDocument(html), url: res.url, whole: !res.truncated && /html/.test(res.headers.get("content-type") ?? "") };
+    }
   }
   const $ = html === null ? null : cheerio.load(html);
 

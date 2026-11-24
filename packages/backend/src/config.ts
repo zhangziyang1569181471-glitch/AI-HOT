@@ -40,7 +40,7 @@ export const config = {
   databaseUrl: str("DATABASE_URL", "postgres://127.0.0.1:5432/aihot"),
   apiPort: int("API_PORT", 3001),
   // Every generated absolute link uses this address, whatever Host a request arrives with.
-  siteUrl: str("SITE_URL", SITE.defaultUrl).replace(/\/+$/, ""),
+  siteUrl: str("SITE_URL", env.VERCEL_URL ? `https://${env.VERCEL_URL}` : SITE.defaultUrl).replace(/\/+$/, ""),
   egressProxyUrl: env.EGRESS_PROXY_URL || null,
   allowPrivateNetworkFetch: bool("ALLOW_PRIVATE_NETWORK_FETCH", false),
   /** Whole host names of self-hosted feed services on private addresses; only listing fetches use them. */

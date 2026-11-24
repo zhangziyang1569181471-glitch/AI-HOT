@@ -5,7 +5,12 @@ import { data, redirect, type HeadersArgs } from "react-router";
 import { logError } from "./errors.server.ts";
 
 /** Where the api listens (API_BASE_URL, set by the deployment); development uses the default. */
-export const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3001";
+export const API_BASE_URL = process.env.API_BASE_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://127.0.0.1:3001");
+
+// The protected preview's own SSR requests use Vercel's server-side bypass only on its exact host.
+const previewBypass = process.env.VERCEL_URL && API_BASE_URL === `https://${process.env.VERCEL_URL}`
+  ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined;
 
 /** An api answer other than 2xx. A merged story answers 308 with the story it now lives in. */
 class ApiError extends Error {
@@ -23,7 +28,8 @@ class ApiError extends Error {
 export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers },
+      headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers,
+        ...(previewBypass ? { "x-vercel-protection-bypass": previewBypass } : {}) },
       redirect: "manual",
       signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     });
