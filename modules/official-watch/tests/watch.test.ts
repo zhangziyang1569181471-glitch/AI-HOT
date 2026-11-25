@@ -9,7 +9,7 @@ import { config } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { watchOfficialPage } from "../watch.ts";
-import { collectQueenslandNewsLeads, QUEENSLAND_LEADS_ID, QUEENSLAND_NEWS_RSS } from "../qld-news-leads.ts";
+import { collectQueenslandNewsLeads, QUEENSLAND_BACKUP_RSS, QUEENSLAND_LEADS_ID, QUEENSLAND_NEWS_RSS } from "../qld-news-leads.ts";
 import { parseTasmaniaRound } from "../tasmania.ts";
 import { readStudentPriorityRules } from "../government-snapshots.ts";
 import { cricosRecord, providerPriorityDocument, readEmployerSalaries, readTraFees, readTrainingRegister } from "../approved-pages.ts";
@@ -242,12 +242,22 @@ test("Queensland RSS collects isolated review leads once and ignores index dates
   const reply = (entries: string) => network.get(href.origin).intercept({ path: href.pathname + href.search })
     .reply(200, "<rss version='2.0'><channel><title>site:www.migration.qld.gov.au/news - Google News</title>"
       + entries + "</channel></rss>");
+  const backupUrl = new URL(QUEENSLAND_BACKUP_RSS);
+  const replyBackup = (entries: string) => network.get(backupUrl.origin).intercept({ path: backupUrl.pathname })
+    .reply(200, "<rss version='2.0'><channel><title>VisaRadar: Queensland migration news</title>" + entries + "</channel></rss>");
   const title = "2024–25 State Nominated Migration Program Allocation &amp; eligibility";
   reply(item(title, link + "?oc=5") + item(title, link + "?oc=1")
     + item("News for Migration Agents", "https://news.google.com/rss/articles/nav")
     + item("Other publisher", "https://news.google.com/rss/articles/foreign", source + ".example.com")
     + item("Not a Google news link", "https://example.com/rss/articles/invalid"));
-  assert.deepEqual(await collectQueenslandNewsLeads(), { status: "ok", received: 5, found: 1, created: 1 });
+  replyBackup(item("Unrelated site", "https://example.com/news/other"));
+  const first = await collectQueenslandNewsLeads();
+  assert.ok(first.status === "ok");
+  assert.equal(first.feed, "google");
+  assert.equal(first.received, 5);
+  assert.equal(first.found, 1);
+  assert.equal(first.created, 1);
+  assert.equal(first.checks.visaradar.status, "failed");
   const [lead] = await sql`SELECT id,title,url,published_at,published_at_claim,body_text,body_status,processing_queued_at,backfill
     FROM articles WHERE source_id=${QUEENSLAND_LEADS_ID}`;
   assert.equal(lead.title, "2024–25 State Nominated Migration Program Allocation & eligibility");
@@ -260,11 +270,33 @@ test("Queensland RSS collects isolated review leads once and ignores index dates
   assert.equal(lead.backfill, true);
 
   reply(item(title, link + "?oc=7"));
-  assert.deepEqual(await collectQueenslandNewsLeads(), { status: "ok", received: 1, found: 1, created: 0 });
+  const officialLink = "https://migration.qld.gov.au/news/queensland-update";
+  replyBackup(item("Queensland update", officialLink));
+  const again = await collectQueenslandNewsLeads();
+  assert.ok(again.status === "ok");
+  assert.equal(again.feed, "google");
+  assert.equal(again.created, 0);
+  assert.equal(again.checks.visaradar.found, 1);
   const [summary] = await sql`SELECT count(*)::int AS n FROM articles WHERE source_id=${QUEENSLAND_LEADS_ID}`;
   assert.equal(summary.n, 1);
   const [visibility] = await sql`SELECT count(*)::int AS n FROM publications WHERE article_id=${lead.id}`;
   assert.equal(visibility.n, 0);
   const [official] = await sql`SELECT count(*)::int AS n FROM fetch_runs WHERE source_id='au-qld-news'`;
   assert.equal(official.n, 0);
+
+  network.get(href.origin).intercept({ path: href.pathname + href.search }).reply(503, "service unavailable");
+  replyBackup(item("Queensland update", officialLink)
+    + item("Duplicate URL", "https://www.migration.qld.gov.au/news/queensland-update/?tracking=1")
+    + item("Landing page", "https://migration.qld.gov.au/news"));
+  const fallback = await collectQueenslandNewsLeads();
+  assert.ok(fallback.status === "ok");
+  assert.equal(fallback.feed, "visaradar");
+  assert.equal(fallback.checks.google.status, "failed");
+  assert.equal(fallback.found, 1);
+  assert.equal(fallback.created, 1);
+  const [backupLead] = await sql`SELECT published_at,body_text,body_status,raw FROM articles WHERE url=${officialLink}`;
+  assert.equal(backupLead.published_at, null);
+  assert.equal(backupLead.body_text, null);
+  assert.equal(backupLead.body_status, "unconfirmed");
+  assert.equal(backupLead.raw.qldNewsLead.feedUrl, QUEENSLAND_BACKUP_RSS);
 });

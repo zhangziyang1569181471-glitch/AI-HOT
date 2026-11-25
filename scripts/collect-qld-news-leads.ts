@@ -9,9 +9,11 @@ if (!process.env.DATABASE_URL || process.env.COLLECT_ENABLED !== "true" || proce
 
 try {
   const result = await recordRun("cloud.qld-news-leads", collectQueenslandNewsLeads);
-  const summary = result.status === "skipped" ? "昆州 Google 新闻 RSS 已暂停。"
-    : "昆州 Google 新闻 RSS 读取 " + result.received + " 条，筛出 " + result.found + " 条线索，新增 "
+  const summary = result.status === "skipped" ? "昆州 RSS 已暂停。"
+    : "昆州 RSS 本轮采用 " + (result.feed === "google" ? "Google 新闻" : "VisaRadar 备用订阅")
+      + "，读取 " + result.received + " 条，筛出 " + result.found + " 条线索，新增 "
       + result.created + " 条待审，" + (result.found - result.created) + " 条已入库。";
+  if (result.status === "ok") console.log(JSON.stringify(result.checks));
   console.log(summary);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary + "\n");
 } finally {

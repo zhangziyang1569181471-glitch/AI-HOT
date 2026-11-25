@@ -34,7 +34,7 @@
 
 ## 昆州待审线索
 
-[qld-google-news-leads](https://news.google.com/rss/search?q=site%3Awww.migration.qld.gov.au%2Fnews&hl=en-AU&gl=AU&ceid=AU%3Aen) 由 GitHub Actions 每 4 小时采集。后台在「信源 → 昆州移民新闻 · Google 新闻 RSS（待审线索）」查看。采集器核对索引标注的机构域名，按 Google 新闻链接去重。待审条目保留标题和 Google 新闻链接，正文与原始发布日期留空。核实昆州移民局原文后，可用官方链接另行收录。官方新闻源 `au-qld-news` 继续记录官网的实测状态。
+[qld-google-news-leads](https://news.google.com/rss/search?q=site%3Awww.migration.qld.gov.au%2Fnews&hl=en-AU&gl=AU&ceid=AU%3Aen) 由 GitHub Actions 每 4 小时采集。后台在「信源 → 昆州移民新闻 · RSS（待审线索）」查看。每轮同时检查 Google 新闻与 [VisaRadar 的昆州 RSS](https://visaradar-au.github.io/visaradar/states/qld/news.xml)。Google 新闻无法读取或没有有效线索时，切到备用订阅。备用订阅仅接收指向 Migration Queensland 官方新闻正文的链接。两个订阅分别记录读取结果，各自按链接去重。遇到旧网址或不同链接指向同一公告时，由编辑核对。待审条目保留标题和链接，正文与原始发布日期留空。核实昆州移民局原文后，可用官方链接另行收录。官方新闻源 `au-qld-news` 继续记录官网的实测状态。
 
 手动运行 Australia Policy Radar collection 时可勾选 `qld_leads_only`。定时运行时先读取待审线索，再采集官方信源。
 

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       qld_leads_only:
-        description: Collect Queensland Google News review leads only
+        description: Collect Queensland RSS review leads only
         type: boolean
         default: false
       retry_failed:
@@ -35,7 +35,7 @@ jobs:
           cache: npm
       - run: npm ci
         id: dependencies
-      - name: Collect Queensland Google News leads
+      - name: Collect Queensland RSS leads
         if: ${{ !inputs.retry_failed || inputs.qld_leads_only }}
         run: |
           node scripts/seed.ts --source qld-google-news-leads

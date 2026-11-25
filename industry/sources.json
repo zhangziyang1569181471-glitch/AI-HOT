@@ -242,7 +242,7 @@
     },
     {
       "id": "qld-google-news-leads",
-      "name": "昆州移民新闻 · Google 新闻 RSS（待审线索）",
+      "name": "昆州移民新闻 · RSS（待审线索）",
       "kind": "external",
       "config": {},
       "tier": "T2",
