@@ -9,6 +9,9 @@ import { config } from "@aihot/backend/config";
 import { closeDb, sql } from "@aihot/backend/db";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { watchOfficialPage } from "../watch.ts";
+import { selectOfficialDaily } from "../daily-selection.ts";
+import { upsertMaterial } from "@aihot/backend/content/materials";
+import { loadTimeline } from "@aihot/backend/publication/timeline";
 import { collectQueenslandNewsLeads, QUEENSLAND_BACKUP_RSS, QUEENSLAND_LEADS_ID, QUEENSLAND_NEWS_RSS } from "../qld-news-leads.ts";
 import { parseTasmaniaRound } from "../tasmania.ts";
 import { readStudentPriorityRules } from "../government-snapshots.ts";
@@ -299,4 +302,60 @@ test("Queensland RSS collects isolated review leads once and ignores index dates
   assert.equal(backupLead.body_text, null);
   assert.equal(backupLead.body_status, "unconfirmed");
   assert.equal(backupLead.raw.qldNewsLead.feedUrl, QUEENSLAND_BACKUP_RSS);
+});
+
+test("automatic daily selection publishes a dated official notice once and keeps uncertain leads private", async () => {
+  const now = new Date("2026-11-26T00:40:00Z");
+  const publishedAt = new Date("2026-11-25T03:00:00Z");
+  const official = "South Australia’s General Skilled Migration Program Update - November";
+  const bodyText = "The General Skilled Migration program will continue to invite eligible candidates during the program year.";
+  for (const source of ["au-sa-news", "au-qld-news"]) {
+    await sql`INSERT INTO sources(id,name,kind,tier,enabled,participation_mode,site_fulltext)
+      VALUES(${source},${source},'web_list','T1',true,'editorial',false)
+      ON CONFLICT(id) DO UPDATE SET enabled=true, participation_mode='editorial', site_fulltext=false`;
+  }
+  function fixture(path: string, extra: Partial<Parameters<typeof upsertMaterial>[0]> = {}) {
+    return upsertMaterial({
+      sourceId: "au-sa-news",
+      url: "https://migration.sa.gov.au/news/" + path,
+      title: official, bodyText, bodyStatus: "ok", publishedAt, publicationTime: "2026-11-25",
+      discoveredAt: new Date("2026-11-25T03:30:00Z"), via: "fetch", ...extra,
+    });
+  }
+  const selected = await fixture("nov-program");
+  const duplicate = await fixture("nov-program-duplicate", {
+    title: official.replace(" - ", " — "),
+    publishedAt: new Date("2026-11-25T02:59:00Z"),
+  });
+  const previousDecision = await fixture("manual", { title: "General Skilled Migration Program allocation update" });
+  await sql`INSERT INTO editorial_overrides (article_id, visibility) VALUES (${previousDecision.articleId}, 'withdrawn')`;
+  const held = await Promise.all([
+    fixture("undated", { publishedAt: null, publicationTime: null }),
+    fixture("no-body", { bodyStatus: "unconfirmed", bodyText: "" }),
+    fixture("old", { publishedAt: new Date("2026-10-25T00:00:00Z"), publicationTime: "2026-10-25" }),
+    fixture("webinar", { title: "Webinar: General Skilled Migration Program update" }),
+    fixture("irrelevant", { title: "Annual community festival opens" }),
+    fixture("unconfirmed-topic", { bodyText: "This page is about the community festival." }),
+    fixture("other-domain", { url: "https://migration.sa.gov.au.example.org/news/stale" }),
+    fixture("qld", {
+      sourceId: "au-qld-news", url: "https://migration.qld.gov.au/news/latest-indexed",
+      title: "State Nominated Migration Program allocation",
+    }),
+  ]);
+
+  const plan = await selectOfficialDaily({ now, dryRun: true });
+  assert.deepEqual(plan.selectedIds, [selected.articleId]);
+  assert.equal(plan.duplicates, 1);
+  assert.equal((await sql`SELECT 1 FROM analyses WHERE article_id=${selected.articleId}`).length, 0);
+
+  assert.deepEqual((await selectOfficialDaily({ now })).selectedIds, [selected.articleId]);
+  assert.deepEqual((await selectOfficialDaily({ now })).selectedIds, []);
+  const feed = await loadTimeline({ channel: "news", category: null, tag: null, now });
+  assert.deepEqual(feed.cards.map(card => card.item.id), [selected.articleId]);
+  assert.equal(feed.cards[0]?.item.title, official);
+  const [result] = await sql`SELECT p.body_mode,p.published_at,a.origin,a.model,a.score
+    FROM publications p JOIN analyses a ON a.id=p.analysis_id WHERE p.article_id=${selected.articleId}`;
+  assert.deepEqual(result, { body_mode: "summary", published_at: publishedAt, origin: "rule", model: null, score: null });
+  const excluded = [duplicate, previousDecision, ...held].map(row => row.articleId);
+  assert.equal((await sql`SELECT 1 FROM publications WHERE article_id=ANY(${excluded}) AND selected`).length, 0);
 });
