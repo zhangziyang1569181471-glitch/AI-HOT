@@ -7,7 +7,7 @@ import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
 import { stopBoss } from "@aihot/backend/jobs/queue";
 import { publishArticle, publishArticleTx } from "@aihot/backend/publication/publish";
-import { composeDaily } from "@aihot/backend/reports/compose";
+import { composeDaily, composeVerifiedDaily } from "@aihot/backend/reports/compose";
 import { candidates } from "@aihot/backend/reports/edition";
 
 const T = tag();
@@ -177,4 +177,40 @@ test("daily composition waits for a pre-cutoff release to commit instead of losi
     commit.open();
     await Promise.allSettled([publication, report]);
   }
+});
+
+test("the verified daily skips empty windows and publishes only eligible official picks once", async () => {
+  const date = "2026-11-26";
+  const at = editionAt("daily", date, -900);
+  const now = editionAt("daily", date, 600);
+  const waiting = await analyzed("daily-pool-only", at);
+  await publishArticle(waiting, { now: at });
+  const unverified = await selected("daily-unverified", at, at);
+  await sql`UPDATE articles SET body_status = 'unconfirmed' WHERE id = ${unverified}`;
+  const undated = await selected("daily-undated", at, at);
+  await sql`UPDATE publications SET published_at = NULL WHERE article_id = ${undated}`;
+  const next = await selected("daily-after-cutoff", at, editionAt("daily", date, 300));
+
+  assert.deepEqual(await composeVerifiedDaily(now), { key: date, entries: 0, status: "no-new-items" });
+  assert.equal((await sql`SELECT 1 FROM reports WHERE kind = 'daily' AND key = ${date}`).length, 0);
+
+  const originalDate = editionAt("daily", date, -1800);
+  const official = await selected("daily-verified", originalDate, at);
+  const runs = await Promise.all([composeVerifiedDaily(now), composeVerifiedDaily(now)]);
+  assert.deepEqual(runs.map((r) => r.status).sort(), ["already-published", "published"]);
+  const [report] = await sql<{
+    revision: number; model: string | null;
+    content: { picks?: unknown; sections: Array<{ items: Array<{ itemId: string; publishedAt: string }> }>; generator: { mode: string } };
+  }[]>`SELECT revision, model, content FROM reports WHERE kind = 'daily' AND key = ${date}`;
+  assert.equal(report!.revision, 1);
+  assert.equal(report!.model, null);
+  assert.equal(report!.content.generator.mode, "verified-selection");
+  assert.equal(report!.content.picks, undefined);
+  assert.deepEqual(report!.content.sections.flatMap((section) => section.items)
+    .map(({ itemId, publishedAt }) => [itemId, publishedAt]), [[official, originalDate.toISOString()]]);
+
+  const nextDay = editionAt("daily", "2026-11-27", 600);
+  assert.deepEqual(await composeVerifiedDaily(nextDay), { key: "2026-11-27", entries: 1, status: "published" });
+  const [later] = await sql`SELECT content->>'leadItemId' AS lead FROM reports WHERE kind = 'daily' AND key = '2026-11-27'`;
+  assert.equal(later?.lead, next);
 });

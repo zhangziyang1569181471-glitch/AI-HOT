@@ -87,12 +87,12 @@ export interface EditionEntry {
 
 type ReportRow = RepresentativeIdentity & {
   id: string; title: string; summary: string | null; url: string; category: string | null; tags: string[]; score: number | null;
-  first_party: boolean; body_mode: "full" | "summary"; timeline_at: Date;
+  first_party: boolean; body_mode: "full" | "summary"; timeline_at: Date; published_at: Date | null;
   source_id: string; source_name: string; source_kind: string;
   fact_id: number | null; fact_public_id: string | null; story_id: number | null; story_public_id: string | null;
 };
 
-const REPORT_FIELDS = sql`p.article_id AS id, p.title, p.summary, p.url, p.category, p.tags, p.score, (s.tier = 'T1') AS first_party, p.body_mode, p.timeline_at,
+const REPORT_FIELDS = sql`p.article_id AS id, p.title, p.summary, p.url, p.category, p.tags, p.score, (s.tier = 'T1') AS first_party, p.body_mode, p.timeline_at, p.published_at,
   ${REPRESENTATIVE_COLUMNS}, s.id AS source_id, s.name AS source_name, s.kind AS source_kind,
   f.id AS fact_id, f.public_id AS fact_public_id, st.id AS story_id, st.public_id::text AS story_public_id`;
 
@@ -102,7 +102,7 @@ const REPORT_FIELDS = sql`p.article_id AS id, p.title, p.summary, p.url, p.categ
  * issue, never to one already out). A report that arrived more than a day before the period began and
  * was released only within it is old news there.
  */
-export async function periodReports(start: Date, end: Date): Promise<ReportRow[]> {
+export async function periodReports(start: Date, end: Date, verifiedSelection = false): Promise<ReportRow[]> {
   return sql.begin("isolation level read committed", async (tx) => {
     // Wait for in-flight releases and keep later ones outside this snapshot. The following SELECT
     // gets a fresh READ COMMITTED snapshot; model calls and report writes happen after the lock ends.
@@ -118,7 +118,10 @@ export async function periodReports(start: Date, end: Date): Promise<ReportRow[]
           (p.visible_after <= p.timeline_at AND p.timeline_at >= ${start} AND p.timeline_at < ${end})
           OR (p.visible_after > p.timeline_at AND p.visible_after >= ${start} AND p.visible_after < ${end})
         )
-        AND p.timeline_at >= ${start}::timestamptz - interval '24 hours'`;
+        AND p.timeline_at >= ${start}::timestamptz - interval '24 hours'
+        ${verifiedSelection ? tx`AND p.eligible AND p.channel = 'news' AND p.published_at < ${end}
+          AND s.tier = 'T1' AND s.participation_mode = 'editorial'
+          AND EXISTS (SELECT 1 FROM articles a WHERE a.id = p.article_id AND a.body_status = 'ok')` : tx``}`;
   });
 }
 
@@ -339,8 +342,12 @@ interface Fact { key: string; rows: ReportRow[]; selected: boolean; sources: str
  * The daily's events for the window [start, end), most important first, before the editors' pass:
  * selected reports and missed facts, minus what the week's issues already carried, one entry per event.
  */
-export async function dailyEdition(date: string, start: Date, end: Date): Promise<{ entries: EditionEntry[]; stats: Record<string, number> }> {
-  const [memory, selected, missed, judged] = await Promise.all([dailyMemory(date), periodReports(start, end), missedFacts(start, end), judgedReports(start, end)]);
+export async function dailyEdition(date: string, start: Date, end: Date, verifiedSelection = false): Promise<{ entries: EditionEntry[]; stats: Record<string, number> }> {
+  const [memory, selected, missed, judged] = await Promise.all([
+    dailyMemory(date), periodReports(start, end, verifiedSelection),
+    verifiedSelection ? [] : missedFacts(start, end),
+    verifiedSelection ? 0 : judgedReports(start, end),
+  ]);
   const raw = [
     ...[...groupBy(selected, factKeyOf)].map(([key, rows]) => ({ key, rows, selected: true })),
     ...missed.map((m) => ({ ...m, selected: false })),
@@ -388,6 +395,7 @@ export async function dailyEdition(date: string, start: Date, end: Date): Promis
     const score = Math.max(rep.score ?? 0, ...fs.filter((f) => f.selected).flatMap((f) => f.rows.map((r) => r.score ?? 0)));
     const entry: DailyEntry = {
       ...reportEntry(rep),
+      ...(verifiedSelection && rep.published_at ? { publishedAt: rep.published_at.toISOString() } : {}),
       sources: sourceIds.size,
       ...(reps.length > 1 ? { related: reps.slice(1).map((r) => asRelated(reportEntry(r))) } : {}),
       ...(previous ? { followUp: previous.key } : {}),

@@ -56,8 +56,16 @@ jobs:
           COLLECT_ENABLED: 'true'
           MODEL_CALLS_ENABLED: 'false'
       - name: Publish official daily selections
+        id: daily_selection
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && !inputs.qld_leads_only }}
         run: node scripts/select-official-daily.ts
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+          MODEL_CALLS_ENABLED: 'false'
+      - name: Publish verified daily report
+        if: ${{ !cancelled() && steps.daily_selection.outcome == 'success' }}
+        run: node scripts/compose-official-daily.ts
         env:
           NODE_ENV: production
           DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}

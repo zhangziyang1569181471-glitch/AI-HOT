@@ -91,17 +91,30 @@ const DAILY_HIGHLIGHTS = 3;
  * with nothing new in it still has its issue: no entries, no highlights, and a lead that says so (REPORTS.quiet).
  */
 export async function composeDaily(date: string, reason?: string): Promise<{ key: string; entries: number }> {
+  const { key, entries } = await composeDailyIssue(date, { reason });
+  return { key, entries };
+}
+
+/** The cloud site issues a daily only from verified selections that were not already covered. */
+export function composeVerifiedDaily(now = new Date()) {
+  return composeDailyIssue(dueDaily(now), { verifiedSelection: true });
+}
+
+async function composeDailyIssue(date: string, { reason, verifiedSelection = false }: { reason?: string; verifiedSelection?: boolean }): Promise<{
+  key: string; entries: number; status: "published" | "already-published" | "no-new-items";
+}> {
   const previous = await savedReport("daily", date);
-  if (previous && reason === undefined) return { key: date, entries: previous.entries };
+  if (previous && reason === undefined) return { key: date, entries: previous.entries, status: "already-published" };
   const end = beijingAt(date, EDITION_TIMES.daily);
   const start = new Date(end.getTime() - 86400000);
-  const edition = await dailyEdition(date, start, end);
+  const edition = await dailyEdition(date, start, end, verifiedSelection);
+  if (verifiedSelection && edition.entries.length === 0) return { key: date, entries: 0, status: "no-new-items" };
   // Nothing judged in the window is a failure upstream, not a quiet day: the run fails and is caught up later.
   if (edition.entries.length === 0 && edition.stats.judgedReports === 0) throw new Error(`daily ${date}: nothing judged in its window`);
   const issue = arrangeDaily(edition.entries);
   const [lead, ...rest] = issue.main;
   const highlights = rest.slice(0, DAILY_HIGHLIGHTS).map((e) => e.entry.itemId);
-  const picks = lead ? await dailyPicks(date, start, end, [...issue.main, ...issue.flashes], DAILY_HIGHLIGHTS - highlights.length) : [];
+  const picks = lead && !verifiedSelection ? await dailyPicks(date, start, end, [...issue.main, ...issue.flashes], DAILY_HIGHLIGHTS - highlights.length) : [];
   const content = {
     date,
     lead: lead
@@ -117,10 +130,11 @@ export async function composeDaily(date: string, reason?: string): Promise<{ key
     metrics: dailyMetrics(issue.main),
     windowStart: start.toISOString(),
     windowEnd: end.toISOString(),
-    generator: { version: REPORT_VERSION, ...edition.stats, ...issue.stats },
+    generator: { version: REPORT_VERSION, ...(verifiedSelection ? { mode: "verified-selection" } : {}), ...edition.stats, ...issue.stats },
   };
-  await saveReport("daily", date, start, end, content, reason, null, []);
-  return { key: date, entries: issue.main.length };
+  const written = await saveReport("daily", date, start, end, content, reason, null, []);
+  if (written) return { key: date, entries: issue.main.length, status: "published" };
+  return { key: date, entries: (await savedReport("daily", date))!.entries, status: "already-published" };
 }
 
 /** A weekly's or monthly's size: the events it carries, chosen and ordered by rule. */
